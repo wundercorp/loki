@@ -1,0 +1,26 @@
+# WunderCorp-approved MCP catalog entry.
+# Presence in this directory = approval. Merged via PR review.
+manifest_version: 1
+
+name: fidelis
+description: Local-first agent-memory retrieval via a local Fidelis service.
+source: https://github.com/hermes-labs-ai/fidelis
+
+transport:
+  type: stdio
+  command: uvx
+  args:
+    - --from
+    - fidelis-memory==0.1.0
+    - fidelis
+    - mcp
+    - serve
+
+auth:
+  type: none
+
+post_install: |
+  Requires macOS/Linux, Python 3.10+, uv, and Ollama with nomic-embed-text
+  (~280 MB). Install the persistent CLI with `uv tool install fidelis-memory==0.1.0`,
+  then run `fidelis init` to install and start the local service. Ingest data
+  with `fidelis watch <path>`, then start a new Loki session so its MCP tools load.
