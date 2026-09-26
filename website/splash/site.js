@@ -3,6 +3,18 @@
   const banner = document.getElementById('cookie-banner');
   const dismiss = document.getElementById('cookie-dismiss');
   const consentKey = 'loki-cookie-banner-v1';
+  const githubStatsBanner = document.querySelector('.github-stats-banner');
+  const githubStatsStatus = document.querySelector('[data-github-status]');
+  const githubStatElements = {
+    stars: document.querySelector('[data-github-stat="stars"]'),
+    forks: document.querySelector('[data-github-stat="forks"]'),
+    watchers: document.querySelector('[data-github-stat="watchers"]'),
+  };
+  const githubStatsEndpoint = 'https://api.github.com/repos/wundercorp/loki';
+  const githubStatsCacheKey = 'loki-github-stats-v1';
+  const githubStatsRefreshInterval = 5 * 60 * 1000;
+  let githubStatsLastUpdatedAt = 0;
+  let githubStatsRefreshTimer = null;
   const installCommands = {
     curl: { value: 'curl -fsSL https://loki.computer/install.sh | bash', link: false },
     npm: { value: 'npm install -g @wundercorp/loki', link: false },
@@ -32,6 +44,79 @@
   const footerAsciiArt = document.querySelector('.footer-ascii-art');
   const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
   const wait = delay => new Promise(resolve => window.setTimeout(resolve, delay));
+  const formatGithubStat = value => new Intl.NumberFormat(undefined, { notation: value >= 10000 ? 'compact' : 'standard', maximumFractionDigits: 1 }).format(value);
+  const renderGithubStats = stats => {
+    const values = {
+      stars: stats.stargazers_count,
+      forks: stats.forks_count,
+      watchers: stats.subscribers_count,
+    };
+    for (const [key, value] of Object.entries(values)) {
+      if (Number.isFinite(value) && githubStatElements[key]) {
+        githubStatElements[key].textContent = formatGithubStat(value);
+      }
+    }
+  };
+  const readGithubStatsCache = () => {
+    try {
+      const cached = JSON.parse(localStorage.getItem(githubStatsCacheKey) || 'null');
+      if (!cached || !cached.data || !Number.isFinite(cached.updatedAt)) return null;
+      return cached;
+    } catch {
+      return null;
+    }
+  };
+  const refreshGithubStats = async ({ force = false } = {}) => {
+    if (!githubStatsBanner) return;
+    const now = Date.now();
+    if (!force && githubStatsLastUpdatedAt && now - githubStatsLastUpdatedAt < githubStatsRefreshInterval) return;
+
+    try {
+      const response = await fetch(githubStatsEndpoint, {
+        headers: { Accept: 'application/vnd.github+json' },
+        cache: 'no-store',
+      });
+      if (!response.ok) throw new Error(`GitHub API returned ${response.status}`);
+      const data = await response.json();
+      renderGithubStats(data);
+      githubStatsLastUpdatedAt = Date.now();
+      githubStatsBanner.classList.remove('is-stale');
+      if (githubStatsStatus) githubStatsStatus.textContent = 'Live';
+      try {
+        localStorage.setItem(githubStatsCacheKey, JSON.stringify({ data, updatedAt: githubStatsLastUpdatedAt }));
+      } catch {
+      }
+    } catch {
+      githubStatsBanner.classList.add('is-stale');
+      if (githubStatsStatus) githubStatsStatus.textContent = 'Cached';
+    }
+  };
+  const initializeGithubStats = () => {
+    if (!githubStatsBanner) return;
+    const cached = readGithubStatsCache();
+    if (cached) {
+      renderGithubStats(cached.data);
+      githubStatsLastUpdatedAt = cached.updatedAt;
+      if (Date.now() - cached.updatedAt >= githubStatsRefreshInterval) {
+        githubStatsBanner.classList.add('is-stale');
+      }
+    }
+
+    refreshGithubStats({ force: true });
+    githubStatsRefreshTimer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') refreshGithubStats({ force: true });
+    }, githubStatsRefreshInterval);
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && Date.now() - githubStatsLastUpdatedAt >= githubStatsRefreshInterval) {
+        refreshGithubStats({ force: true });
+      }
+    });
+
+    window.addEventListener('pagehide', () => {
+      if (githubStatsRefreshTimer) window.clearInterval(githubStatsRefreshTimer);
+    }, { once: true });
+  };
   const copyText = async value => {
     if (navigator.clipboard?.writeText && window.isSecureContext) {
       await navigator.clipboard.writeText(value);
@@ -49,6 +134,8 @@
     textarea.remove();
     if (!copied) throw new Error('Copy failed');
   };
+
+  initializeGithubStats();
 
   copyCommand?.addEventListener('click', async () => {
     const activeTab = installTabs.find(tab => tab.classList.contains('is-active'));

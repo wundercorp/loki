@@ -37,18 +37,22 @@ def test_github_install_tab_exposes_a_real_link():
     assert "installLink.hidden = !config.link" in javascript
 
 
-def test_splash_has_repo_cta_sponsor_and_agent_alignment_fix():
+def test_splash_has_repo_cta_live_github_stats_and_agent_alignment_fix():
     html = (SPLASH / "index.html").read_text()
     css = (SPLASH / "site.css").read_text()
+    javascript = (SPLASH / "site.js").read_text()
 
-    assert 'href="https://agentvm.sh"' in html
-    assert 'rel="sponsored noopener noreferrer"' in html
-    assert '>AgentVM</strong>' in html
-    assert 'Run your agent sandboxes in the cloud' in html
+    assert 'class="github-stats-banner"' in html
+    assert '>wundercorp/loki</strong>' in html
+    assert 'data-github-stat="stars"' in html
+    assert 'data-github-stat="forks"' in html
+    assert 'data-github-stat="watchers"' in html
+    assert "https://api.github.com/repos/wundercorp/loki" in javascript
+    assert "githubStatsRefreshInterval = 5 * 60 * 1000" in javascript
+    assert 'subscribers_count' in javascript
     assert 'class="repo-button"' in html
     assert '<span>View Repo</span>' in html
     assert '<span>Join Discord</span>' in html
-    assert '<span class="repo-symbol" aria-hidden="true">💻</span>' in html
     assert '█████╗  ██████╗  ███████╗███╗   ██╗████████╗' in html
-    assert '.sponsor-banner {' in css
+    assert '.github-stats-banner {' in css
     assert '.hero-actions {' in css
