@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#020611">
+  <meta name="application-name" content="Loki Agent">
+  <meta name="description" content="A live two-week timeline of changes landing in the Loki Agent repository.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://loki.computer/timeline">
+  <meta property="og:site_name" content="Loki Agent">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Loki Timeline — WunderCorp, Inc.">
+  <meta property="og:description" content="A live changelog generated from Loki's GitHub commit history.">
+  <meta property="og:url" content="https://loki.computer/timeline">
+  <meta property="og:image" content="https://loki.computer/loki-og.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Loki Timeline — WunderCorp, Inc.">
+  <meta name="twitter:description" content="A live changelog generated from Loki's GitHub commit history.">
+  <meta name="twitter:image" content="https://loki.computer/loki-og.png">
+  <title>Loki Timeline — WunderCorp, Inc.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@phosphor-icons/web@2.1.2/src/regular/style.css">
+  <link rel="stylesheet" href="/timeline/timeline.css">
+</head>
+<body>
+  <header class="timeline-header">
+    <a class="timeline-home" href="/" aria-label="Loki home">
+      <span class="timeline-mark" aria-hidden="true">𖤍</span>
+      <span>Loki</span>
+    </a>
+    <nav aria-label="Timeline navigation">
+      <a href="https://github.com/wundercorp/loki" target="_blank" rel="noopener noreferrer">GitHub <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+
+  <main class="timeline-shell">
+    <section class="timeline-intro" aria-labelledby="timeline-title">
+      <p class="timeline-eyebrow">Changelog</p>
+      <h1 id="timeline-title">Timeline</h1>
+      <p class="timeline-description">A rolling two-week view of changes landing in Loki, directly from the repository.</p>
+      <div class="timeline-meta" aria-live="polite">
+        <span class="timeline-live"><span class="timeline-live-dot" aria-hidden="true"></span><span data-timeline-status>Syncing</span></span>
+        <span data-timeline-range>Past 14 days</span>
+      </div>
+    </section>
+
+    <section class="timeline-feed" aria-label="Loki repository changelog">
+      <div class="timeline-list" id="timeline-list" aria-live="polite" aria-busy="true">
+        <div class="timeline-loading">
+          <span class="timeline-loading-dot" aria-hidden="true"></span>
+          <span>Loading recent commits…</span>
+        </div>
+      </div>
+      <p class="timeline-empty" id="timeline-empty" hidden>No commits landed in this window.</p>
+    </section>
+  </main>
+
+  <footer class="timeline-footer">
+    <span>© 2026 WunderCorp, Inc.</span>
+    <nav aria-label="Footer links">
+      <a href="/">Home</a>
+      <a href="https://github.com/wundercorp/loki/commits" target="_blank" rel="noopener noreferrer">All commits</a>
+      <a href="https://x.com/wundercorp" target="_blank" rel="noopener noreferrer">X</a>
+    </nav>
+  </footer>
+
+  <script src="/timeline/timeline.js" defer></script>
+</body>
+</html>

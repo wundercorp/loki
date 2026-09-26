@@ -133,6 +133,8 @@ function serve() {
       relative = "privacy/index.html";
     } else if (requestPath === "/terms" || requestPath === "/terms/") {
       relative = "terms/index.html";
+    } else if (requestPath === "/timeline" || requestPath === "/timeline/") {
+      relative = "timeline/index.html";
     } else {
       relative = requestPath.replace(/^\/+/, "");
     }
