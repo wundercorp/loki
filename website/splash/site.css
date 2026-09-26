@@ -2450,12 +2450,12 @@ body {
 .npm-stats-link {
   display: flex;
   width: min(1120px, calc(100% - 40px));
-  min-height: 104px;
+  min-height: 76px;
   margin: 0 auto;
   align-items: center;
   justify-content: center;
-  gap: 34px;
-  padding: 22px 0;
+  gap: 26px;
+  padding: 15px 0;
   color: inherit;
   text-decoration: none;
 }
@@ -2470,19 +2470,19 @@ body {
 .npm-stats-brand strong {
   display: inline-grid;
   place-items: center;
-  min-width: 46px;
-  height: 25px;
+  min-width: 42px;
+  height: 23px;
   padding: 0 8px;
   border-radius: 5px;
-  background: #cb3837;
-  color: #fff;
-  font: 800 12px/1 var(--font-body);
-  letter-spacing: 0.08em;
+  background: #2563eb;
+  color: #eff6ff;
+  font: 600 10px/1 var(--font-body);
+  letter-spacing: 0.07em;
 }
 
 .npm-stats-brand span {
-  color: #a9bddc;
-  font: 600 12px/1.2 var(--font-body);
+  color: #8fa8ca;
+  font: 400 11px/1.2 var(--font-body);
 }
 
 .npm-stats-list {
@@ -2494,9 +2494,9 @@ body {
 
 .npm-stat {
   display: grid;
-  gap: 5px;
-  min-width: 150px;
-  padding: 0 24px;
+  gap: 4px;
+  min-width: 132px;
+  padding: 0 20px;
   border-left: 1px solid rgba(147, 197, 253, 0.16);
   text-align: left;
 }
@@ -2507,49 +2507,15 @@ body {
 
 .npm-stat-label {
   color: #718db4;
-  font: 700 9px/1.2 var(--font-body);
-  letter-spacing: 0.14em;
+  font: 500 8px/1.2 var(--font-body);
+  letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
 .npm-stat strong {
-  color: #eef6ff;
-  font: 600 19px/1.15 var(--font-display);
-  letter-spacing: -0.02em;
-}
-
-.npm-stats-live {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: #8faed9;
-  font: 700 10px/1 var(--font-body);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
-.npm-stats-live-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: #60a5fa;
-  box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.09), 0 0 14px rgba(96, 165, 250, 0.5);
-}
-
-.npm-stats-banner.is-stale .npm-stats-live-dot {
-  opacity: 0.45;
-  box-shadow: none;
-}
-
-.npm-stats-arrow {
-  color: #7996bf;
-  font-size: 16px;
-  transition: transform 160ms ease, color 160ms ease;
-}
-
-.npm-stats-link:hover .npm-stats-arrow {
-  color: #bfdbfe;
-  transform: translate(2px, -2px);
+  color: #dbeafe;
+  font: 500 15px/1.15 var(--font-body);
+  letter-spacing: -0.01em;
 }
 
 .npm-stats-link:focus-visible {
@@ -2689,10 +2655,10 @@ body {
 @media (max-width: 720px) {
   .npm-stats-link {
     width: min(100% - 28px, 680px);
-    min-height: 126px;
+    min-height: 104px;
     flex-wrap: wrap;
-    gap: 14px 18px;
-    padding: 20px 0;
+    gap: 10px 16px;
+    padding: 14px 0;
   }
 
   .npm-stats-brand {

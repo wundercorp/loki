@@ -16,7 +16,6 @@
   let githubStatsLastUpdatedAt = 0;
   let githubStatsRefreshTimer = null;
   const npmStatsBanner = document.querySelector('.npm-stats-banner');
-  const npmStatsStatus = document.querySelector('[data-npm-status]');
   const npmStatElements = {
     version: document.querySelector('[data-npm-stat="version"]'),
     weekly: document.querySelector('[data-npm-stat="weekly"]'),
@@ -171,14 +170,12 @@
       renderNpmStats(data);
       npmStatsLastUpdatedAt = Date.now();
       npmStatsBanner.classList.remove('is-stale');
-      if (npmStatsStatus) npmStatsStatus.textContent = 'Live';
       try {
         localStorage.setItem(npmStatsCacheKey, JSON.stringify({ data, updatedAt: npmStatsLastUpdatedAt }));
       } catch {
       }
     } catch {
       npmStatsBanner.classList.add('is-stale');
-      if (npmStatsStatus) npmStatsStatus.textContent = 'Cached';
     }
   };
   const initializeNpmStats = () => {
