@@ -2437,51 +2437,122 @@ body {
   --radius-internal: 16px;
 }
 
-.company-ticker {
+.npm-stats-banner {
   position: relative;
   z-index: 2;
   width: 100%;
   border-top: 1px solid rgba(147, 197, 253, 0.18);
   border-bottom: 1px solid rgba(147, 197, 253, 0.18);
-  background: rgba(3, 10, 24, 0.88);
+  background: rgba(3, 10, 24, 0.92);
   color: #dbeafe;
 }
 
-.company-ticker-link {
+.npm-stats-link {
   display: flex;
+  width: min(1120px, calc(100% - 40px));
   min-height: 104px;
+  margin: 0 auto;
   align-items: center;
   justify-content: center;
-  flex-direction: column;
-  gap: 7px;
-  padding: 28px 24px;
-  text-align: center;
+  gap: 34px;
+  padding: 22px 0;
+  color: inherit;
   text-decoration: none;
-  border-radius: 0;
 }
 
-.company-ticker-title {
+.npm-stats-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 auto;
+}
+
+.npm-stats-brand strong {
+  display: inline-grid;
+  place-items: center;
+  min-width: 46px;
+  height: 25px;
+  padding: 0 8px;
+  border-radius: 5px;
+  background: #cb3837;
+  color: #fff;
+  font: 800 12px/1 var(--font-body);
+  letter-spacing: 0.08em;
+}
+
+.npm-stats-brand span {
+  color: #a9bddc;
+  font: 600 12px/1.2 var(--font-body);
+}
+
+.npm-stats-list {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 0;
+}
+
+.npm-stat {
+  display: grid;
+  gap: 5px;
+  min-width: 150px;
+  padding: 0 24px;
+  border-left: 1px solid rgba(147, 197, 253, 0.16);
+  text-align: left;
+}
+
+.npm-stat:last-child {
+  border-right: 1px solid rgba(147, 197, 253, 0.16);
+}
+
+.npm-stat-label {
+  color: #718db4;
+  font: 700 9px/1.2 var(--font-body);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.npm-stat strong {
   color: #eef6ff;
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: -0.015em;
+  font: 600 19px/1.15 var(--font-display);
+  letter-spacing: -0.02em;
 }
 
-.company-ticker-copy {
+.npm-stats-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   color: #8faed9;
-  font-family: var(--font-body);
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 1.45;
+  font: 700 10px/1 var(--font-body);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
-.company-ticker-link:hover .company-ticker-copy {
-  color: #b9cff0;
+.npm-stats-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: #60a5fa;
+  box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.09), 0 0 14px rgba(96, 165, 250, 0.5);
 }
 
-.company-ticker-link:focus-visible {
+.npm-stats-banner.is-stale .npm-stats-live-dot {
+  opacity: 0.45;
+  box-shadow: none;
+}
+
+.npm-stats-arrow {
+  color: #7996bf;
+  font-size: 16px;
+  transition: transform 160ms ease, color 160ms ease;
+}
+
+.npm-stats-link:hover .npm-stats-arrow {
+  color: #bfdbfe;
+  transform: translate(2px, -2px);
+}
+
+.npm-stats-link:focus-visible {
   outline: 2px solid #93c5fd;
   outline-offset: -3px;
 }
@@ -2616,18 +2687,36 @@ body {
 }
 
 @media (max-width: 720px) {
-  .company-ticker-link {
-    min-height: 116px;
-    padding: 30px 20px;
+  .npm-stats-link {
+    width: min(100% - 28px, 680px);
+    min-height: 126px;
+    flex-wrap: wrap;
+    gap: 14px 18px;
+    padding: 20px 0;
   }
 
-  .company-ticker-title {
-    font-size: 17px;
+  .npm-stats-brand {
+    width: 100%;
+    justify-content: center;
   }
 
-  .company-ticker-copy {
-    max-width: 320px;
-    font-size: 13px;
+  .npm-stats-list {
+    width: 100%;
+  }
+
+  .npm-stat {
+    min-width: 0;
+    flex: 1 1 0;
+    padding: 0 12px;
+    text-align: center;
+  }
+
+  .npm-stat strong {
+    font-size: 15px;
+  }
+
+  .npm-stat-label {
+    font-size: 8px;
   }
 
   .section-light-white .memory-flow {

@@ -15,6 +15,20 @@
   const githubStatsRefreshInterval = 5 * 60 * 1000;
   let githubStatsLastUpdatedAt = 0;
   let githubStatsRefreshTimer = null;
+  const npmStatsBanner = document.querySelector('.npm-stats-banner');
+  const npmStatsStatus = document.querySelector('[data-npm-status]');
+  const npmStatElements = {
+    version: document.querySelector('[data-npm-stat="version"]'),
+    weekly: document.querySelector('[data-npm-stat="weekly"]'),
+    total: document.querySelector('[data-npm-stat="total"]'),
+  };
+  const npmVersionEndpoint = 'https://registry.npmjs.org/%40wundercorp%2Floki/latest';
+  const npmWeeklyDownloadsEndpoint = 'https://api.npmjs.org/downloads/point/last-week/%40wundercorp%2Floki';
+  const npmTotalDownloadsEndpoint = 'https://img.shields.io/npm/dt/%40wundercorp%2Floki.json';
+  const npmStatsCacheKey = 'loki-npm-stats-v1';
+  const npmStatsRefreshInterval = 5 * 60 * 1000;
+  let npmStatsLastUpdatedAt = 0;
+  let npmStatsRefreshTimer = null;
   const installCommands = {
     curl: { value: 'curl -fsSL https://loki.computer/install.sh | bash', link: false },
     npm: { value: 'npm install -g @wundercorp/loki', link: false },
@@ -117,6 +131,80 @@
       if (githubStatsRefreshTimer) window.clearInterval(githubStatsRefreshTimer);
     }, { once: true });
   };
+  const formatNpmDownloads = value => new Intl.NumberFormat(undefined, { notation: value >= 1000 ? 'compact' : 'standard', maximumFractionDigits: 1 }).format(value);
+  const renderNpmStats = stats => {
+    if (npmStatElements.version && stats.version) npmStatElements.version.textContent = `v${String(stats.version).replace(/^v/, '')}`;
+    if (npmStatElements.weekly && Number.isFinite(stats.weekly)) npmStatElements.weekly.textContent = `${formatNpmDownloads(stats.weekly)}/week`;
+    if (npmStatElements.total && stats.total) npmStatElements.total.textContent = stats.total;
+  };
+  const readNpmStatsCache = () => {
+    try {
+      const cached = JSON.parse(localStorage.getItem(npmStatsCacheKey) || 'null');
+      if (!cached || !cached.data || !Number.isFinite(cached.updatedAt)) return null;
+      return cached;
+    } catch {
+      return null;
+    }
+  };
+  const refreshNpmStats = async ({ force = false } = {}) => {
+    if (!npmStatsBanner) return;
+    const now = Date.now();
+    if (!force && npmStatsLastUpdatedAt && now - npmStatsLastUpdatedAt < npmStatsRefreshInterval) return;
+
+    try {
+      const [versionResponse, weeklyResponse, totalResponse] = await Promise.all([
+        fetch(npmVersionEndpoint, { cache: 'no-store' }),
+        fetch(npmWeeklyDownloadsEndpoint, { cache: 'no-store' }),
+        fetch(npmTotalDownloadsEndpoint, { cache: 'no-store' }),
+      ]);
+      if (!versionResponse.ok || !weeklyResponse.ok || !totalResponse.ok) throw new Error('NPM stats request failed');
+      const [versionData, weeklyData, totalData] = await Promise.all([
+        versionResponse.json(),
+        weeklyResponse.json(),
+        totalResponse.json(),
+      ]);
+      const data = {
+        version: versionData.version,
+        weekly: weeklyData.downloads,
+        total: totalData.message,
+      };
+      renderNpmStats(data);
+      npmStatsLastUpdatedAt = Date.now();
+      npmStatsBanner.classList.remove('is-stale');
+      if (npmStatsStatus) npmStatsStatus.textContent = 'Live';
+      try {
+        localStorage.setItem(npmStatsCacheKey, JSON.stringify({ data, updatedAt: npmStatsLastUpdatedAt }));
+      } catch {
+      }
+    } catch {
+      npmStatsBanner.classList.add('is-stale');
+      if (npmStatsStatus) npmStatsStatus.textContent = 'Cached';
+    }
+  };
+  const initializeNpmStats = () => {
+    if (!npmStatsBanner) return;
+    const cached = readNpmStatsCache();
+    if (cached) {
+      renderNpmStats(cached.data);
+      npmStatsLastUpdatedAt = cached.updatedAt;
+      if (Date.now() - cached.updatedAt >= npmStatsRefreshInterval) npmStatsBanner.classList.add('is-stale');
+    }
+
+    refreshNpmStats({ force: true });
+    npmStatsRefreshTimer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') refreshNpmStats({ force: true });
+    }, npmStatsRefreshInterval);
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && Date.now() - npmStatsLastUpdatedAt >= npmStatsRefreshInterval) {
+        refreshNpmStats({ force: true });
+      }
+    });
+
+    window.addEventListener('pagehide', () => {
+      if (npmStatsRefreshTimer) window.clearInterval(npmStatsRefreshTimer);
+    }, { once: true });
+  };
   const copyText = async value => {
     if (navigator.clipboard?.writeText && window.isSecureContext) {
       await navigator.clipboard.writeText(value);
@@ -136,6 +224,7 @@
   };
 
   initializeGithubStats();
+  initializeNpmStats();
 
   copyCommand?.addEventListener('click', async () => {
     const activeTab = installTabs.find(tab => tab.classList.contains('is-active'));

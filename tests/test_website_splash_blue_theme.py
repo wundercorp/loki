@@ -56,3 +56,22 @@ def test_splash_has_repo_cta_live_github_stats_and_agent_alignment_fix():
     assert '█████╗  ██████╗  ███████╗███╗   ██╗████████╗' in html
     assert '.github-stats-banner {' in css
     assert '.hero-actions {' in css
+
+
+def test_splash_has_live_npm_stats_banner_below_hero():
+    html = (SPLASH / "index.html").read_text()
+    css = (SPLASH / "site.css").read_text()
+    javascript = (SPLASH / "site.js").read_text()
+
+    assert 'class="npm-stats-banner"' in html
+    assert 'href="https://www.npmjs.com/package/@wundercorp/loki"' in html
+    assert 'data-npm-stat="version"' in html
+    assert 'data-npm-stat="weekly"' in html
+    assert 'data-npm-stat="total"' in html
+    assert 'hello@wundercorp.co' not in html
+    assert 'Using Loki Agent at your company?' not in html
+    assert 'https://registry.npmjs.org/%40wundercorp%2Floki/latest' in javascript
+    assert 'https://api.npmjs.org/downloads/point/last-week/%40wundercorp%2Floki' in javascript
+    assert 'https://img.shields.io/npm/dt/%40wundercorp%2Floki.json' in javascript
+    assert 'npmStatsRefreshInterval = 5 * 60 * 1000' in javascript
+    assert '.npm-stats-banner {' in css
