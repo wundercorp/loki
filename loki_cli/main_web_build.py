@@ -391,7 +391,7 @@ def _missing_web_build_tool(output: str) -> str | None:
     return None
 
 
-def _build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
+def _build_web_ui(web_dir: Path, *, fatal: bool = False, require_fresh: bool = False) -> bool:
     """Build the web UI if npm is available, serialized across processes by flock: one builds, the
     rest serve the existing dist (stale is fine) or block until the first build exists. Staleness is
     checked inside :func:`_do_build_web_ui` after the lock is held."""
@@ -401,12 +401,12 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
         import fcntl
     except ImportError:
         # Windows: no flock — fall through to the unserialized build.
-        return _do_build_web_ui(web_dir, fatal=fatal)
+        return _do_build_web_ui(web_dir, fatal=fatal, require_fresh=require_fresh)
     project_root = _web_project_root(web_dir)
     try:
         lock_file = open(project_root / ".web_ui_build.lock", "a", encoding="utf-8")
     except OSError:
-        return _do_build_web_ui(web_dir, fatal=fatal)
+        return _do_build_web_ui(web_dir, fatal=fatal, require_fresh=require_fresh)
     try:
         try:
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -414,7 +414,7 @@ def _build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
             if (_web_dist_dir(web_dir) / "index.html").exists():
                 return True  # another process is building — serve the current dist
             fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)  # first-ever build: wait
-        return _do_build_web_ui(web_dir, fatal=fatal)
+        return _do_build_web_ui(web_dir, fatal=fatal, require_fresh=require_fresh)
     finally:
         lock_file.close()
 
@@ -469,7 +469,7 @@ def _report_web_build_failure(step: str, result: subprocess.CompletedProcess, *,
     return False
 
 
-def _do_build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
+def _do_build_web_ui(web_dir: Path, *, fatal: bool = False, require_fresh: bool = False) -> bool:
     """Build the web UI frontend if npm is available.
 
     ``fatal`` prints error guidance and returns False on failure instead of a
@@ -532,7 +532,7 @@ def _do_build_web_ui(web_dir: Path, *, fatal: bool = False) -> bool:
             preview = ((r2.stderr or "") + (r2.stdout or "")).strip()
             if preview:
                 _console_print("  Build error:\n  " + "\n  ".join(preview.splitlines()[-10:]))
-            return True
+            return not require_fresh
         return _report_web_build_failure("build", r2, fatal=fatal)
     _console_print("  ✓ Web UI built")
     _write_web_ui_build_stamp(_web_project_root(web_dir), web_dir)

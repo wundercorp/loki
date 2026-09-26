@@ -1219,7 +1219,7 @@ def _apply_pulled_update(
         _windows_gateway_resume=_windows_gateway_resume)
 
     node_failures = _update_node_dependencies()
-    _m()._build_web_ui(_m().PROJECT_ROOT / "web")
+    web_build_ok = _m()._build_web_ui(_m().PROJECT_ROOT / "web", require_fresh=True)
     desktop_build_ok = _rebuild_desktop_after_update(
         desktop_dir, had_desktop_app_before_update=had_desktop_app_before_update)
 
@@ -1230,7 +1230,7 @@ def _apply_pulled_update(
         assume_yes=opts.assume_yes, gateway_mode=gateway_mode,
         pre_update_snapshot_id=pre_update_snapshot_id,
         had_desktop_app_before_update=had_desktop_app_before_update,
-        node_failures=node_failures, desktop_build_ok=desktop_build_ok,
+        node_failures=node_failures, web_build_ok=web_build_ok, desktop_build_ok=desktop_build_ok,
         pre_update_version=opts.pre_update_version)
 
     # Exit code *before* the restart: under --gateway this process lives in the gateway's

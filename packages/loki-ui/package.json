@@ -8,31 +8,106 @@
     "react-dom": ">=18"
   },
   "exports": {
-    "./hooks/use-below-breakpoint": "./hooks/use-below-breakpoint.js",
-    "./hooks/use-confirm-delete": "./hooks/use-confirm-delete.js",
-    "./hooks/use-toast": "./hooks/use-toast.js",
-    "./ui/components/badge": "./ui/components/badge.js",
-    "./ui/components/bottom-sheet": "./ui/components/bottom-sheet.js",
-    "./ui/components/button": "./ui/components/button.js",
-    "./ui/components/card": "./ui/components/card.js",
-    "./ui/components/checkbox": "./ui/components/checkbox.js",
-    "./ui/components/command-block": "./ui/components/command-block.js",
-    "./ui/components/confirm-dialog": "./ui/components/confirm-dialog.js",
-    "./ui/components/dialog": "./ui/components/dialog.js",
-    "./ui/components/input": "./ui/components/input.js",
-    "./ui/components/label": "./ui/components/label.js",
-    "./ui/components/list-item": "./ui/components/list-item.js",
-    "./ui/components/segmented": "./ui/components/segmented.js",
-    "./ui/components/select": "./ui/components/select.js",
-    "./ui/components/selection-switcher": "./ui/components/selection-switcher.js",
-    "./ui/components/separator": "./ui/components/separator.js",
-    "./ui/components/spinner": "./ui/components/spinner.js",
-    "./ui/components/stats": "./ui/components/stats.js",
-    "./ui/components/switch": "./ui/components/switch.js",
-    "./ui/components/tabs": "./ui/components/tabs.js",
-    "./ui/components/toast": "./ui/components/toast.js",
-    "./ui/components/typography/h2": "./ui/components/typography/h2.js",
-    "./ui/components/typography/index": "./ui/components/typography/index.js"
+    "./hooks/use-below-breakpoint": {
+      "types": "./hooks/use-below-breakpoint.d.ts",
+      "default": "./hooks/use-below-breakpoint.js"
+    },
+    "./hooks/use-confirm-delete": {
+      "types": "./hooks/use-confirm-delete.d.ts",
+      "default": "./hooks/use-confirm-delete.js"
+    },
+    "./hooks/use-toast": {
+      "types": "./hooks/use-toast.d.ts",
+      "default": "./hooks/use-toast.js"
+    },
+    "./ui/components/badge": {
+      "types": "./ui/components/badge.d.ts",
+      "default": "./ui/components/badge.js"
+    },
+    "./ui/components/bottom-sheet": {
+      "types": "./ui/components/bottom-sheet.d.ts",
+      "default": "./ui/components/bottom-sheet.js"
+    },
+    "./ui/components/button": {
+      "types": "./ui/components/button.d.ts",
+      "default": "./ui/components/button.js"
+    },
+    "./ui/components/card": {
+      "types": "./ui/components/card.d.ts",
+      "default": "./ui/components/card.js"
+    },
+    "./ui/components/checkbox": {
+      "types": "./ui/components/checkbox.d.ts",
+      "default": "./ui/components/checkbox.js"
+    },
+    "./ui/components/command-block": {
+      "types": "./ui/components/command-block.d.ts",
+      "default": "./ui/components/command-block.js"
+    },
+    "./ui/components/confirm-dialog": {
+      "types": "./ui/components/confirm-dialog.d.ts",
+      "default": "./ui/components/confirm-dialog.js"
+    },
+    "./ui/components/dialog": {
+      "types": "./ui/components/dialog.d.ts",
+      "default": "./ui/components/dialog.js"
+    },
+    "./ui/components/input": {
+      "types": "./ui/components/input.d.ts",
+      "default": "./ui/components/input.js"
+    },
+    "./ui/components/label": {
+      "types": "./ui/components/label.d.ts",
+      "default": "./ui/components/label.js"
+    },
+    "./ui/components/list-item": {
+      "types": "./ui/components/list-item.d.ts",
+      "default": "./ui/components/list-item.js"
+    },
+    "./ui/components/segmented": {
+      "types": "./ui/components/segmented.d.ts",
+      "default": "./ui/components/segmented.js"
+    },
+    "./ui/components/select": {
+      "types": "./ui/components/select.d.ts",
+      "default": "./ui/components/select.js"
+    },
+    "./ui/components/selection-switcher": {
+      "types": "./ui/components/selection-switcher.d.ts",
+      "default": "./ui/components/selection-switcher.js"
+    },
+    "./ui/components/separator": {
+      "types": "./ui/components/separator.d.ts",
+      "default": "./ui/components/separator.js"
+    },
+    "./ui/components/spinner": {
+      "types": "./ui/components/spinner.d.ts",
+      "default": "./ui/components/spinner.js"
+    },
+    "./ui/components/stats": {
+      "types": "./ui/components/stats.d.ts",
+      "default": "./ui/components/stats.js"
+    },
+    "./ui/components/switch": {
+      "types": "./ui/components/switch.d.ts",
+      "default": "./ui/components/switch.js"
+    },
+    "./ui/components/tabs": {
+      "types": "./ui/components/tabs.d.ts",
+      "default": "./ui/components/tabs.js"
+    },
+    "./ui/components/toast": {
+      "types": "./ui/components/toast.d.ts",
+      "default": "./ui/components/toast.js"
+    },
+    "./ui/components/typography/h2": {
+      "types": "./ui/components/typography/h2.d.ts",
+      "default": "./ui/components/typography/h2.js"
+    },
+    "./ui/components/typography/index": {
+      "types": "./ui/components/typography/index.d.ts",
+      "default": "./ui/components/typography/index.js"
+    }
   },
   "scripts": {
     "check": "node --check ui/components/_base.js",

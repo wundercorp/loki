@@ -402,7 +402,7 @@ def _update_via_zip(args, *, had_desktop_app_before_update: bool = False) -> boo
         print("  Re-run `loki update` to complete it.")
         _m().sys.exit(1)
     node_failures = _update_node_dependencies()
-    _m()._build_web_ui(_m().PROJECT_ROOT / "web")
+    web_build_ok = _m()._build_web_ui(_m().PROJECT_ROOT / "web", require_fresh=True)
     desktop_build_ok = _rebuild_desktop_after_update(
         _m().PROJECT_ROOT / "apps" / "desktop", had_desktop_app_before_update=had_desktop_app_before_update,
     )
@@ -419,7 +419,8 @@ def _update_via_zip(args, *, had_desktop_app_before_update: bool = False) -> boo
         # See #97994.
         _verify_and_restore_state_dbs_post_update()
     update_complete = _print_update_summary(
-        node_failures=node_failures, desktop_build_ok=desktop_build_ok, pre_update_version=pre_update_version,
+        node_failures=node_failures, web_build_ok=web_build_ok, desktop_build_ok=desktop_build_ok,
+        pre_update_version=pre_update_version,
     )
     with _best_effort('Curator first-run notice failed: %s'):
         _print_curator_first_run_notice()

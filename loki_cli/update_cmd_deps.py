@@ -523,12 +523,17 @@ def _repair_node_deps_on_current_checkout(
         print_completion("⚠ Checkout is current, but Node.js dependencies could not be repaired.")
         return False
     # Pair with the web build like every other call site; it staleness-checks internally.
-    _m()._build_web_ui(_m().PROJECT_ROOT / "web")
+    web_build_ok = _m()._build_web_ui(_m().PROJECT_ROOT / "web", require_fresh=True)
     _check_and_apply_config_migration(
         assume_yes=assume_yes, gateway_mode=gateway_mode, pre_update_snapshot_id=pre_update_snapshot_id)
     # A current checkout can still owe a Desktop rebuild (e.g. the Windows hand-off child
     # never reaches the commits-pulled rebuild). Self-gates on the build stamp.
     # Skipping it leaves a stale desktop app behind a successful-looking update. See #97343.
+    if not web_build_ok:
+        print_completion(
+            "⚠ Checkout is current, but the web UI could not be rebuilt; "
+            "the previous web UI build was preserved.")
+        return False
     if not _rebuild_desktop_after_update(
         _m().PROJECT_ROOT / "apps" / "desktop", had_desktop_app_before_update=had_desktop_app_before_update):
         # Retry hint already printed; withhold success rather than claim completion.

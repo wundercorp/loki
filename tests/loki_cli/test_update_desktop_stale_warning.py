@@ -134,6 +134,20 @@ def test_summary_omits_success_banner_when_desktop_rebuild_failed(capsys):
     assert "loki desktop" in out
 
 
+def test_summary_omits_success_banner_when_web_rebuild_failed(capsys):
+    complete = _print_update_summary(
+        node_failures=[],
+        web_build_ok=False,
+        desktop_build_ok=True,
+        pre_update_version="0.20.1",
+    )
+    out = capsys.readouterr().out
+    assert complete is False
+    assert "Update complete" not in out
+    assert "previous build was preserved" in out
+    assert "re-run `loki update`" in out
+
+
 def test_summary_keeps_success_banner_when_desktop_ok(capsys, monkeypatch):
     monkeypatch.setattr(
         update_cmd, "_update_complete_message", lambda _v: "✓ Update complete! (v0.20.2)"

@@ -423,8 +423,10 @@ def _clear_stale_sqlite_sidecars(db_path: Path) -> None:
         db_path.with_name(db_path.name + suffix).unlink(missing_ok=True)
 
 
-def _print_update_summary(*, node_failures: list, desktop_build_ok: bool, pre_update_version: str | None) -> bool:
-    """Final banner. A failed Desktop rebuild is non-fatal but must not print ``✓ Update complete!``.
+def _print_update_summary(
+    *, node_failures: list, desktop_build_ok: bool, pre_update_version: str | None, web_build_ok: bool = True
+) -> bool:
+    """Final banner. Failed frontend/Desktop rebuilds preserve old artifacts but withhold success.
 
     See #88251.
     """
@@ -434,10 +436,12 @@ def _print_update_summary(*, node_failures: list, desktop_build_ok: bool, pre_up
         # Grace path: only a POSITIVE vulnerable probe demotes success to partial.
         sqlite_runtime_ok = True
     print()
-    if node_failures or not desktop_build_ok or not sqlite_runtime_ok:
+    if node_failures or not web_build_ok or not desktop_build_ok or not sqlite_runtime_ok:
         parts = []
         if node_failures:
             parts.append(f"Node.js dependencies for {', '.join(node_failures)} did not refresh")
+        if not web_build_ok:
+            parts.append("the web UI could not be rebuilt and the previous build was preserved")
         if not desktop_build_ok:
             parts.append("the desktop app was not rebuilt and is still on the previous build")
         if not sqlite_runtime_ok and sqlite_info is not None:
@@ -446,6 +450,8 @@ def _print_update_summary(*, node_failures: list, desktop_build_ok: bool, pre_up
         if node_failures:
             print("  Code and Python deps are updated, but the dashboard/TUI may")
             print("  be in a mixed state until the Node deps are rebuilt.")
+        if not web_build_ok:
+            print("  Fix the web build error and re-run `loki update`.")
         if not desktop_build_ok:
             print("  Run `loki desktop` to retry the desktop rebuild.")
         if not sqlite_runtime_ok:
@@ -457,7 +463,7 @@ def _print_update_summary(*, node_failures: list, desktop_build_ok: bool, pre_up
             )
     else:
         _print_update_completion(_update_complete_message(pre_update_version))
-    return desktop_build_ok and sqlite_runtime_ok
+    return web_build_ok and desktop_build_ok and sqlite_runtime_ok
 
 
 def _restore_state_db_from_snapshot(state_path: Path, snap_state: Path) -> bool:
@@ -1006,7 +1012,7 @@ def _print_post_update_notices_and_self_heals() -> None:
 
 def _run_post_update_maintenance(
     *, assume_yes, gateway_mode, pre_update_snapshot_id, had_desktop_app_before_update, node_failures, desktop_build_ok,
-    pre_update_version,
+    pre_update_version, web_build_ok=True,
 ) -> bool:
     """Post-pull housekeeping: state.db restore, catalog/skills/profile syncs, config migration,
     the update summary (verdict returned), and best-effort notices/self-heals. Every step is
@@ -1058,7 +1064,8 @@ def _run_post_update_maintenance(
     )
 
     update_complete = _print_update_summary(
-        node_failures=node_failures, desktop_build_ok=desktop_build_ok, pre_update_version=pre_update_version,
+        node_failures=node_failures, web_build_ok=web_build_ok, desktop_build_ok=desktop_build_ok,
+        pre_update_version=pre_update_version,
     )
 
     _print_post_update_notices_and_self_heals()

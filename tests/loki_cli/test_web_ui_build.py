@@ -273,6 +273,26 @@ class TestBuildWebUIRetryAndStaleFallback:
         assert "serving stale dist as fallback" in out
         assert "vite ENOMEM" in out  # combined output surfaced to user
 
+    def test_update_can_require_fresh_build_even_when_stale_dist_exists(self, tmp_path, capsys):
+        web_dir, dist_dir = _make_web_dir(tmp_path)
+        _touch(dist_dir / "index.html", offset=-100)
+        _touch(web_dir / "src" / "App.tsx")
+
+        Subprocess = __import__("subprocess")
+        install_ok = Subprocess.CompletedProcess([], 0, stdout="", stderr="")
+        build_fail = Subprocess.CompletedProcess([], 1, stdout="tsc failed", stderr="")
+        with patch("loki_cli.main.shutil.which", return_value="/usr/bin/npm"), \
+             patch("loki_cli.main_web_build._time.sleep"), \
+             patch("loki_cli.main.subprocess.run", return_value=install_ok), \
+             patch("loki_cli.main_web_build._run_with_idle_timeout",
+                   side_effect=[build_fail, build_fail]):
+            result = _build_web_ui(web_dir, require_fresh=True)
+
+        assert result is False
+        out = capsys.readouterr().out
+        assert "serving stale dist as fallback" in out
+        assert "tsc failed" in out
+
 
 class TestBuildWebUIFlock:
     """Cross-process build serialization (salvaged from PR #63455).

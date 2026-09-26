@@ -44,3 +44,21 @@ def test_current_checkout_healthy_node_deps_reports_up_to_date():
     # The refresh pairs with the web build like every other call site.
     m.return_value._build_web_ui.assert_called_once()
     completion.assert_called_once_with("✓ Already up to date!")
+
+
+def test_current_checkout_web_build_failure_is_partial():
+    completion = MagicMock()
+    with patch.object(
+        update_cmd, "_update_node_dependencies", return_value=[]
+    ), patch.object(update_cmd, "_m") as m, patch.object(
+        update_cmd, "_rebuild_desktop_after_update", return_value=True
+    ):
+        m.return_value._build_web_ui.return_value = False
+        complete = update_cmd._repair_node_deps_on_current_checkout(completion)
+
+    assert complete is False
+    m.return_value._build_web_ui.assert_called_once_with(
+        m.return_value.PROJECT_ROOT / "web", require_fresh=True
+    )
+    completion.assert_called_once()
+    assert "web UI could not be rebuilt" in completion.call_args[0][0]
