@@ -2504,8 +2504,8 @@ body {
 
 .npm-stat-label {
   color: #718db4;
-  font: 400 5.5px/1.2 var(--font-body);
-  letter-spacing: 0.10em;
+  font: 400 5px/1.2 var(--font-body);
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
@@ -2679,7 +2679,8 @@ body {
   }
 
   .npm-stat-label {
-    font-size: 5.5px;
+    font-size: 7px;
+    letter-spacing: 0.08em;
   }
 
   .section-light-white .memory-flow {
