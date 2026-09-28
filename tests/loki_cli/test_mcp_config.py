@@ -845,3 +845,39 @@ class TestMcpReauth:
         cmd_mcp_reauth(_make_args(name="ghost", all=False))
         out = capsys.readouterr().out
         assert "not found" in out
+
+
+class TestMcpSupercharger:
+    def test_configure_supercharger_saves_secret_and_server(self, tmp_path, monkeypatch, capsys):
+        monkeypatch.setattr(
+            "loki_cli.mcp_config._probe_single_server",
+            lambda name, config, **kwargs: [("status", "Status"), ("billing_status", "Billing")],
+        )
+        from loki_cli.mcp_config import configure_supercharger_mcp
+
+        success, tool_count = configure_supercharger_mcp(token="sc_live_test_token")
+
+        assert success is True
+        assert tool_count == 2
+        import yaml
+        config = yaml.safe_load((tmp_path / "config.yaml").read_text())
+        server = config["mcp_servers"]["supercharger"]
+        assert server["url"] == "https://mcp.supercharger.sh/"
+        assert server["headers"]["Authorization"] == "Bearer ${MCP_SUPERCHARGER_API_KEY}"
+        assert server["enabled"] is True
+        assert "sc_live_test_token" in (tmp_path / ".env").read_text()
+        assert "Supercharger connected with 2 tool(s)" in capsys.readouterr().out
+
+    def test_configure_supercharger_rejects_failed_probe_without_saving_server(self, tmp_path, monkeypatch):
+        def fail_probe(name, config, **kwargs):
+            raise RuntimeError("401 Unauthorized")
+
+        monkeypatch.setattr("loki_cli.mcp_config._probe_single_server", fail_probe)
+        from loki_cli.mcp_config import configure_supercharger_mcp
+
+        success, tool_count = configure_supercharger_mcp(token="bad-token")
+
+        assert success is False
+        assert tool_count == 0
+        from loki_cli.config import load_config
+        assert "supercharger" not in load_config().get("mcp_servers", {})

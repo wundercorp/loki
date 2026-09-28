@@ -49,7 +49,7 @@ def test_registry_names_resolve_into_the_table():
     # registry commands the CLI never handled inline must still fall through
     dispatched = {c.name for c in COMMAND_REGISTRY if LokiCLI._slash_handler(c.name)}
     # /login and newer named handlers resolve through the naming-convention fallback.
-    assert dispatched == set(OLD_CHAIN_COMMANDS) - {"exit"} | {"quit", "login", "settings", "jev", "ads", "sso", "link", "go"}
+    assert dispatched == set(OLD_CHAIN_COMMANDS) - {"exit"} | {"quit", "login", "settings", "jev", "ads", "sso", "link", "go", "ops", "mcp"}
 
 
 def _cli():

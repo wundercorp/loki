@@ -46,6 +46,14 @@ def build_mcp_parser(subparsers, *, cmd_mcp: Callable) -> None:
 
     mcp_sub.add_parser("list", aliases=["ls"], help="List configured MCP servers")
 
+    mcp_supercharger_p = mcp_sub.add_parser(
+        "supercharger", help="Connect Supercharger with a secure token prompt")
+    mcp_supercharger_p.add_argument(
+        "--url", default="https://mcp.supercharger.sh/", help="Supercharger MCP endpoint")
+    mcp_supercharger_p.add_argument(
+        "--token-env", default="SUPERCHARGER_TOKEN",
+        help="Read the token from this environment variable instead of prompting")
+
     mcp_test_p = mcp_sub.add_parser("test", help="Test MCP server connection")
     mcp_test_p.add_argument("name", help="Server name to test")
 

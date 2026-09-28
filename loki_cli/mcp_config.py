@@ -29,6 +29,59 @@ _MCP_PRESETS: Dict[str, Dict[str, Any]] = {
     "codex": {"command": "codex", "args": ["mcp-server"]},
 }
 
+SUPERCHARGER_MCP_URL = "https://mcp.supercharger.sh/"
+
+
+def configure_supercharger_mcp(token: Optional[str] = None, url: str = SUPERCHARGER_MCP_URL) -> tuple[bool, int]:
+    from loki_cli.cli_output import prompt
+
+    supplied_token = _strip_bearer_prefix(token or os.getenv("SUPERCHARGER_TOKEN", ""))
+    if not supplied_token:
+        supplied_token = _strip_bearer_prefix(prompt("Paste your Supercharger API token", password=True))
+    if not supplied_token:
+        _error("Supercharger API token is required")
+        return False, 0
+
+    endpoint = str(url or SUPERCHARGER_MCP_URL).strip() or SUPERCHARGER_MCP_URL
+    probe_config = {
+        "url": endpoint,
+        "headers": {"Authorization": f"Bearer {supplied_token}"},
+        "enabled": True,
+    }
+    if not _validate_or_warn("supercharger", probe_config):
+        return False, 0
+
+    print()
+    print(color("  Connecting to Supercharger...", Colors.CYAN))
+    try:
+        tools = _probe_single_server("supercharger", probe_config)
+    except Exception as exc:
+        _error(f"Failed to connect: {exc}")
+        return False, 0
+
+    persisted_config = {
+        "url": endpoint,
+        "headers": _save_bearer_auth_token("supercharger", supplied_token),
+        "enabled": True,
+    }
+    if not _save_mcp_server("supercharger", persisted_config):
+        return False, 0
+
+    _success(f"Supercharger connected with {len(tools)} tool(s)")
+    _success(f"Token stored securely in {display_loki_home()}/.env")
+    return True, len(tools)
+
+
+def cmd_mcp_supercharger(args=None):
+    token_env = getattr(args, "token_env", None) if args is not None else None
+    url = getattr(args, "url", None) if args is not None else None
+    token = os.getenv(token_env, "") if token_env else None
+    success, tool_count = configure_supercharger_mcp(token=token, url=url or SUPERCHARGER_MCP_URL)
+    if success:
+        _info(f"Supercharger is ready with {tool_count} MCP tool(s).")
+        _info("Start Loki, or use /mcp reload in an open Loki session.")
+
+
 
 def _info(text: str): print(color(f"  {text}", Colors.DIM))
 def _success(text: str): print(color(f"  ✓ {text}", Colors.GREEN))
@@ -862,6 +915,7 @@ _MCP_USAGE = (
     "loki mcp                                    Open the catalog picker (default)",
     "loki mcp catalog                            List WunderCorp-approved MCPs",
     "loki mcp install <name>                     Install a catalog MCP",
+    "loki mcp supercharger                       Connect Supercharger with a secure token prompt",
     "loki mcp serve                              Run as MCP server",
     "loki mcp add <name> --url <endpoint>        Add a custom MCP server",
     "loki mcp add <name> --command <cmd>         Add a stdio server",
@@ -881,6 +935,9 @@ def mcp_command(args):
     if action == "serve":
         from mcp_serve import run_mcp_server
         run_mcp_server(verbose=getattr(args, "verbose", False))
+        return
+    if action == "supercharger":
+        cmd_mcp_supercharger(args)
         return
     if action in ("picker", "catalog", "install"):
         # Catalog subcommands live in mcp_picker / mcp_catalog; import lazily to keep this module cheap.

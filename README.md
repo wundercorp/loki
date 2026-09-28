@@ -154,6 +154,17 @@ All documentation lives at **[doku.sh](https://doku.sh/#/i/cbe1e051e4be2bb725-26
 | [Skills System](https://doku.sh/#/i/cbe1e051e4be2bb725-26f1d908878243)              | Procedural memory, Skills Hub, creating skills             |
 | [Memory](https://doku.sh/#/i/cbe1e051e4be2bb725-26f1d908878243)                     | Persistent memory, user profiles, best practices           |
 | [MCP Integration](https://doku.sh/#/i/cbe1e051e4be2bb725-26f1d908878243)               | Connect any MCP server for extended capabilities           |
+
+### MCP from Loki
+
+Inside the Loki terminal UI, use `/mcp` to inspect and manage MCP connections without leaving the conversation. `/mcp supercharger` securely configures the Supercharger MCP server and reloads its tools into the current session. The same setup is available before launch with `loki mcp supercharger`.
+
+```text
+/mcp list
+/mcp supercharger
+/mcp test supercharger
+/mcp reload
+```
 | [Cron Scheduling](https://doku.sh/#/i/cbe1e051e4be2bb725-26f1d908878243)              | Scheduled tasks with platform delivery                     |
 | [Context Files](https://doku.sh/#/i/cbe1e051e4be2bb725-26f1d908878243)       | Project context that shapes every conversation             |
 | [Architecture](https://doku.sh/#/i/cbe1e051e4be2bb725-26f1d908878243)             | Project structure, agent loop, key classes                 |

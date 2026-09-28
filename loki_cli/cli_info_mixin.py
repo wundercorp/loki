@@ -850,6 +850,80 @@ class CLIInfoMixin:
         print("🔄 MCP server config changed — reloading connections...")
         threading.Thread(target=self._reload_mcp, daemon=True).start()
 
+    def _handle_mcp_command(self, cmd_original: str = "") -> None:
+        import shlex
+        from types import SimpleNamespace
+        from loki_cli.mcp_config import (
+            SUPERCHARGER_MCP_URL,
+            cmd_mcp_add,
+            cmd_mcp_list,
+            cmd_mcp_remove,
+            cmd_mcp_test,
+            configure_supercharger_mcp,
+        )
+
+        try:
+            parts = shlex.split(cmd_original)
+        except ValueError as exc:
+            self._console_print(f"[red]Invalid /mcp command:[/] {exc}")
+            return
+        args = parts[1:]
+        action = args[0].lower() if args else "list"
+
+        if action in {"list", "ls", "status"}:
+            cmd_mcp_list()
+            return
+        if action in {"help", "?"}:
+            self._console_print("[bold]MCP commands[/]")
+            self._console_print("  /mcp list")
+            self._console_print("  /mcp supercharger")
+            self._console_print("  /mcp add <name> <url>")
+            self._console_print("  /mcp test <name>")
+            self._console_print("  /mcp remove <name>")
+            self._console_print("  /mcp reload")
+            return
+        if action == "supercharger":
+            token = args[1] if len(args) > 1 else None
+            success, _ = configure_supercharger_mcp(token=token, url=SUPERCHARGER_MCP_URL)
+            if success:
+                self._reload_mcp()
+            return
+        if action == "reload":
+            self._confirm_and_reload_mcp("/mcp reload")
+            return
+        if action == "test":
+            if len(args) < 2:
+                self._console_print("[yellow]Usage:[/] /mcp test <name>")
+                return
+            cmd_mcp_test(SimpleNamespace(name=args[1]))
+            return
+        if action in {"remove", "rm"}:
+            if len(args) < 2:
+                self._console_print("[yellow]Usage:[/] /mcp remove <name>")
+                return
+            cmd_mcp_remove(SimpleNamespace(name=args[1]))
+            self._reload_mcp()
+            return
+        if action == "add":
+            if len(args) < 3:
+                self._console_print("[yellow]Usage:[/] /mcp add <name> <url>")
+                return
+            cmd_mcp_add(SimpleNamespace(
+                name=args[1],
+                url=args[2],
+                mcp_command=None,
+                args=[],
+                auth=None,
+                preset=None,
+                connect_timeout=None,
+                env=[],
+            ))
+            self._reload_mcp()
+            return
+
+        self._console_print(f"[yellow]Unknown /mcp action:[/] {action}")
+        self._console_print("Use /mcp help for available commands.")
+
     def _confirm_and_reload_mcp(self, cmd_original: str = "") -> None:
         """Interactive /reload-mcp — confirm (Approve Once / Always Approve / Cancel, gated by
         ``approvals.mcp_reload_confirm``, default on), then reload. The config watcher's
