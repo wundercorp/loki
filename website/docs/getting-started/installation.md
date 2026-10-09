@@ -120,12 +120,18 @@ Running Loki as a dedicated unprivileged user (e.g. a `loki` systemd service acc
    curl -fsSL https://loki.computer/install.sh | bash
    ```
 
-   If you want to skip the Playwright step entirely — for example because you're running headless and don't need browser automation — pass `--skip-browser`:
+   If you only want to skip Playwright/Chromium while keeping the Node-backed TUI/web tooling, pass `--skip-browser`:
    ```bash
    curl -fsSL https://loki.computer/install.sh | bash -s -- --skip-browser
    ```
 
-   The installer also pre-installs [`cua-driver`](../user-guide/features/computer-use.md) so the Computer Use toolset works the moment you enable it; pass `--skip-computer-use` to opt out (it will then install on demand when you enable the tool).
+   For a managed server/VM that only needs the Python agent backend (`loki serve`), use the dedicated headless install shape instead. This **does not run npm at all** and skips the TUI/browser/desktop/Computer Use setup:
+   ```bash
+   curl -fsSL https://loki.computer/install.sh | bash -s -- --headless
+   loki serve --host 127.0.0.1 --port 8081
+   ```
+
+   The regular installer also pre-installs [`cua-driver`](../user-guide/features/computer-use.md) so the Computer Use toolset works the moment you enable it; pass `--skip-computer-use` to opt out (it will then install on demand when you enable the tool).
 
 3. **Make `loki` available to the service user's shells.** The installer writes the launcher to `~/.local/bin/loki`. System service accounts often have a minimal PATH that doesn't include `~/.local/bin`. Either add it to the user's environment, or symlink the launcher into a system location:
    ```bash

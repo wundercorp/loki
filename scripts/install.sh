@@ -73,6 +73,10 @@ USE_VENV=true
 RUN_SETUP=true
 SKIP_BROWSER=false
 SKIP_COMPUTER_USE=false
+# Server/headless installs are intentionally Python-only.  They are used by
+# managed VM/container deployments that run `loki serve` and do not need the
+# browser/TUI/desktop Node workspaces.
+HEADLESS=false
 NO_SKILLS=false
 BRANCH="${LOKI_INSTALL_BRANCH:-main}"
 INSTALL_COMMIT=""
@@ -111,6 +115,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --skip-computer-use)
             SKIP_COMPUTER_USE=true
+            shift
+            ;;
+        --headless|--server)
+            HEADLESS=true
             shift
             ;;
         --no-skills)
@@ -173,6 +181,10 @@ while [[ $# -gt 0 ]]; do
             echo "  --skip-setup   Skip interactive setup wizard"
             echo "  --skip-browser Skip Playwright/Chromium install (browser tools won't work)"
             echo "  --skip-computer-use  Skip the cua-driver (Computer Use) install"
+            echo "  --headless, --server  Install the Python server/runtime only for managed/headless hosts"
+            echo "                   Skips Node workspaces, TUI/browser tooling, Computer Use,"
+            echo "                   setup prompts, desktop build, and automatic CLI launch"
+            echo "                   Start the runtime with: loki serve --host 127.0.0.1 --port PORT"
             echo "  --no-skills    Start with a blank slate — seed no bundled skills, and"
             echo "                   write \$LOKI_HOME/.no-bundled-skills so future"
             echo "                   'loki update' runs never inject bundled skills either"
@@ -211,6 +223,18 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Apply headless policy after all arguments have been parsed so a later flag
+# cannot accidentally re-enable a desktop/browser stage.  Headless is an
+# installation shape, not merely a Playwright opt-out: no npm workspace
+# install is attempted at all.
+if [ "$HEADLESS" = true ]; then
+    RUN_SETUP=false
+    SKIP_BROWSER=true
+    SKIP_COMPUTER_USE=true
+    INCLUDE_DESKTOP=false
+    NON_INTERACTIVE=true
+fi
 
 # ============================================================================
 # Helper functions
@@ -2659,6 +2683,11 @@ node_deps_workspace_args() {
 }
 
 install_node_deps() {
+    if [ "$HEADLESS" = true ]; then
+        log_info "Skipping Node.js/TUI/browser dependencies (--headless)"
+        return 0
+    fi
+
     if [ "$HAS_NODE" = false ]; then
         log_info "Skipping Node.js dependencies (Node not installed)"
         return 0
@@ -2827,6 +2856,11 @@ install_node_deps() {
 }
 
 install_browser_use_cli() {
+    if [ "$HEADLESS" = true ]; then
+        log_info "Skipping Browser Use CLI install (--headless)"
+        return 0
+    fi
+
     # The Browser Use CLI is the default browser backend when it is runnable
     # (tools/browser_use_cli.py). Provision it here so fresh installs don't
     # silently fall back to the built-in browser tools. Best-effort: any
@@ -2895,6 +2929,11 @@ cua_driver_runtime_compatible() {
 }
 
 install_computer_use_driver() {
+    if [ "$HEADLESS" = true ]; then
+        log_info "Skipping Computer Use driver (--headless)"
+        return 0
+    fi
+
     # cua-driver powers the computer_use toolset (background desktop control).
     # Provision it at install time so enabling the tool later — via
     # `loki tools`, the dashboard, or the desktop app — is a config flip,
@@ -3137,6 +3176,14 @@ print_success() {
     echo ""
 
     echo -e "${CYAN}─────────────────────────────────────────────────────────${NC}"
+    if [ "$HEADLESS" = true ]; then
+        echo ""
+        echo -e "${GREEN}${BOLD}✓ Headless/server runtime installed${NC}"
+        echo -e "   Node/TUI/browser workspaces were intentionally not installed."
+        echo -e "   Start the local backend with:"
+        echo -e "   ${GREEN}loki serve --host 127.0.0.1 --port 8081${NC}"
+    fi
+
     echo ""
     echo -e "${CYAN}${BOLD}🚀 Commands:${NC}"
     echo ""
@@ -3161,8 +3208,9 @@ print_success() {
         echo ""
     fi
 
-    # Show Node.js warning if auto-install failed
-    if [ "$HAS_NODE" = false ]; then
+    # Show Node.js warning if auto-install failed. Headless installs deliberately
+    # omit Node/browser tooling, so that is not a degraded state.
+    if [ "$HEADLESS" = false ] && [ "$HAS_NODE" = false ]; then
         echo -e "${YELLOW}"
         echo "Note: Node.js could not be installed automatically."
         echo "Browser tools need Node.js. Install manually:"
@@ -3189,6 +3237,9 @@ print_success() {
 }
 
 launch_loki_after_install() {
+    if [ "$HEADLESS" = true ]; then
+        return 0
+    fi
     if [ "$NON_INTERACTIVE" = true ] || [ ! -r /dev/tty ] || [ ! -w /dev/tty ]; then
         return 0
     fi
@@ -3767,6 +3818,10 @@ run_stage_body() {
             detect_os
             resolve_install_layout
             require_install_dir
+            if [ "$HEADLESS" = true ]; then
+                log_info "Skipping Node/browser stage (--headless)"
+                return 0
+            fi
             check_node
             install_node_deps || return
             install_uv
@@ -3879,17 +3934,23 @@ main() {
     install_uv
     check_python
     check_git
-    check_node
-    check_cxx_compiler
+    if [ "$HEADLESS" = false ]; then
+        check_node
+        check_cxx_compiler
+    else
+        log_info "Headless/server install: skipping Node.js, npm workspaces, TUI, and browser prerequisites"
+    fi
     check_network_prerequisites
     install_system_packages
 
     clone_repo
     setup_venv
     install_deps
-    install_node_deps || return
-    install_browser_use_cli
-    install_computer_use_driver
+    if [ "$HEADLESS" = false ]; then
+        install_node_deps || return
+        install_browser_use_cli
+        install_computer_use_driver
+    fi
     setup_path
     copy_config_templates
     run_setup_wizard
