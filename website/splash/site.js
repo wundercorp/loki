@@ -30,6 +30,7 @@
   let npmStatsRefreshTimer = null;
   const installCommands = {
     curl: { value: 'curl -fsSL https://loki.computer/install.sh | bash', link: false },
+    server: { value: 'curl -fsSL https://loki.computer/install.sh | bash -s -- --headless', link: false },
     npm: { value: 'npm install -g @wundercorp/loki', link: false },
     github: { value: 'https://github.com/wundercorp/loki', link: true },
   };

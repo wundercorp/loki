@@ -348,8 +348,8 @@ class CLIAgentSetupMixin:
         from cli import _cprint, logger
         _cprint("")
         _cprint("⚔ No inference provider is configured yet — let's fix that.")
-        _cprint("  You'll pick a provider (WunderCorp Portal OAuth is the fastest; "
-                "no API key needed) and a model.")
+        _cprint("  You'll pick an inference provider and a model. OpenRouter is the quickest "
+                "API-key setup for most users.")
         try:
             answer = input("  Set up a provider now? [Y/n]: ").strip().lower()
         except (KeyboardInterrupt, EOFError):

@@ -806,6 +806,11 @@ def _build_provider_picker_rows(config: dict, active: str, provider_labels: dict
     else:
         _visible_slugs = [p.slug for p in CANONICAL_PROVIDERS]
 
+    # WunderCorp Portal OAuth is no longer a supported inference-onboarding path.
+    # Keep the legacy provider implementation available for old configurations, but do
+    # not advertise it to new users in `loki model` / first-run setup.
+    _visible_slugs = [slug for slug in _visible_slugs if slug != "wundercorp"]
+
     # The active provider's group when grouped, otherwise the active slug itself.
     active_group = provider_group_for_slug(active) if active else ""
 
@@ -830,14 +835,6 @@ def _build_provider_picker_rows(config: dict, active: str, provider_labels: dict
         else:
             slug = row["slug"]
             label = canonical_descs.get(slug, provider_labels.get(slug, slug))
-            if slug == "wundercorp":
-                # Same free-tier rule as the gateway/TUI pickers: relabel for a guest, hide
-                # when wundercorp.guest is off, untouched for a real account.
-                from loki_cli.model_switch_providers import _free_tier_wundercorp_row
-                tier_row = _free_tier_wundercorp_row({"name": label, "models": []})
-                if tier_row is None:
-                    continue
-                label = tier_row["name"]
             _add(slug, label, [], bool(active) and slug == active)
 
     for key, provider_info in custom_provider_map.items():

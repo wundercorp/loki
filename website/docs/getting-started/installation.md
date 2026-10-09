@@ -25,6 +25,19 @@ For a command-line only install without Loki Desktop, run:
 curl -fsSL https://loki.computer/install.sh | bash
 ```
 
+#### Linux server / VM (headless)
+For AgentVMs, cloud VMs, containers, and other machines that only need the local Loki backend, use the headless installer. It skips the Node/TUI/browser workspaces entirely:
+
+```bash
+curl -fsSL https://loki.computer/install.sh | bash -s -- --headless
+```
+
+Then run the local server directly, or manage it with your service manager:
+
+```bash
+loki serve --host 127.0.0.1 --port 8081
+```
+
 #### Windows (native)
 
 Run in powershell:
