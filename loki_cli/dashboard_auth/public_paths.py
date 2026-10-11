@@ -10,6 +10,10 @@ PUBLIC_API_PATHS: frozenset[str] = frozenset({
     # Minimal process liveness probe for desktop/backend boot handshakes; avoids
     # gateway config, platform discovery, MCP setup and cold plugin imports.
     "/api/health",
+    # AgentVM only exposes this read-only loopback probe through its own guest
+    # status channel. It contains runtime/model names, never credentials.
+    "/api/agentvm/health",
+    "/api/v1/agentvm/health",
     # Portal wildcard liveness probe (``docs/agent-dashboard-public-url-contract.md``,
     # NAS side): version, gateway state, session count, auth-gate shape. No secrets.
     "/api/status",
