@@ -8,12 +8,13 @@ from fastapi import HTTPException
 from loki_cli.web_routers import agentvm
 
 
-def test_bootstrap_persists_openrouter_secret_and_model(monkeypatch):
-    saved_env = {}
+def test_bootstrap_keeps_openrouter_secret_volatile_and_model_persistent(monkeypatch):
+    removed_env = []
     saved_configs = []
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
 
-    monkeypatch.setattr(agentvm, "save_env_value", lambda key, value: saved_env.__setitem__(key, value))
-    monkeypatch.setattr(agentvm, "remove_env_value", lambda key: saved_env.pop(key, None))
+    monkeypatch.setattr(agentvm, "save_env_value", lambda *_: pytest.fail("AgentVM secret must not be persisted"))
+    monkeypatch.setattr(agentvm, "remove_env_value", lambda key: removed_env.append(key))
     monkeypatch.setattr(agentvm, "save_config", lambda cfg, merge_existing=False: saved_configs.append((cfg, merge_existing)))
 
     result = asyncio.run(
@@ -21,11 +22,13 @@ def test_bootstrap_persists_openrouter_secret_and_model(monkeypatch):
             agentvm.AgentVMBootstrapRequest(
                 apiKey="sk-or-v1-test-secret-value-1234567890",
                 model="openai/gpt-5.2",
+                persist=True,
             )
         )
     )
 
-    assert saved_env == {"OPENROUTER_API_KEY": "sk-or-v1-test-secret-value-1234567890"}
+    assert removed_env == ["OPENROUTER_API_KEY"]
+    assert agentvm.os.environ["OPENROUTER_API_KEY"] == "sk-or-v1-test-secret-value-1234567890"
     assert saved_configs == [({"model": {"provider": "openrouter", "default": "openai/gpt-5.2"}}, True)]
     assert result["inference"] == {
         "configured": True,
@@ -43,15 +46,18 @@ def test_bootstrap_rejects_non_openrouter_key(monkeypatch):
 
 def test_bootstrap_can_clear_walton_managed_openrouter_key(monkeypatch):
     cleared = []
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-or-v1-stale-secret-value-1234567890")
     monkeypatch.setattr(agentvm, "remove_env_value", lambda key: cleared.append(key))
     result = asyncio.run(agentvm.agentvm_bootstrap(agentvm.AgentVMBootstrapRequest(clear=True)))
     assert cleared == ["OPENROUTER_API_KEY"]
+    assert "OPENROUTER_API_KEY" not in agentvm.os.environ
     assert result["inference"]["configured"] is False
 
 
 def test_session_only_bootstrap_does_not_persist_secret(monkeypatch):
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     monkeypatch.setattr(agentvm, "save_env_value", lambda *_: pytest.fail("session key must not be persisted"))
+    monkeypatch.setattr(agentvm, "remove_env_value", lambda *_: None)
     monkeypatch.setattr(agentvm, "save_config", lambda *_args, **_kwargs: None)
     result = asyncio.run(agentvm.agentvm_bootstrap(agentvm.AgentVMBootstrapRequest(
         apiKey="sk-or-v1-session-secret-value-1234567890",

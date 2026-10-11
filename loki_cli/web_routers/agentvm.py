@@ -24,7 +24,7 @@ class AgentVMBootstrapRequest(BaseModel):
     provider: str = "openrouter"
     apiKey: Optional[str] = Field(default=None, max_length=1024)
     model: str = "openrouter/auto"
-    persist: bool = True
+    persist: bool = False
     clear: bool = False
 
 
@@ -79,7 +79,11 @@ async def agentvm_bootstrap(body: AgentVMBootstrapRequest) -> dict[str, Any]:
 
     model = body.model.strip() or "openrouter/auto"
     if body.clear:
+        # AgentVM-managed credentials are intentionally volatile so provider snapshots
+        # never clone a user's inference secret. Clear both any legacy persisted value
+        # and the current process copy; Walton will rehydrate on the next paired sync.
         remove_env_value("OPENROUTER_API_KEY")
+        os.environ.pop("OPENROUTER_API_KEY", None)
         return {
             "ok": True,
             "runtime": "loki",
@@ -90,13 +94,13 @@ async def agentvm_bootstrap(body: AgentVMBootstrapRequest) -> dict[str, Any]:
     if not api_key.startswith("sk-or-"):
         raise HTTPException(status_code=400, detail="The OpenRouter API key format is invalid.")
 
-    # A Keychain-backed Walton key is persisted in Loki's normal secret file. A
-    # Walton session-only key lives only in this server process and disappears on
-    # restart; Walton will sync it again while that session is active.
-    if body.persist:
-        save_env_value("OPENROUTER_API_KEY", api_key)
-    else:
-        os.environ["OPENROUTER_API_KEY"] = api_key
+    # AgentVM snapshots must never capture inference credentials. The paired Walton
+    # device is the authority and rehydrates this process after boot/restart. Remove
+    # any value persisted by older AgentVM builds, then keep the current key only in
+    # this process environment. ``persist`` is accepted for wire compatibility but
+    # deliberately ignored on this private AgentVM bridge.
+    remove_env_value("OPENROUTER_API_KEY")
+    os.environ["OPENROUTER_API_KEY"] = api_key
     # Partial merge preserves every unrelated user setting. The model is not secret.
     save_config({"model": {"provider": "openrouter", "default": model}}, merge_existing=True)
 
