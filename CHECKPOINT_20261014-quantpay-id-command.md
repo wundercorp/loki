@@ -11,7 +11,7 @@
 - `/id continue` for authoritative KYA credential issuance and OpenID4VCI pre-authorized-code flow.
 - Holder JWT proof signed locally and bound to the registered QPID public key.
 - Holder credential saved locally with mode 0600.
-- `/id test [merchant]` deterministic USD 100 x402 mandate acceptance test:
+- `/id test [merchant]` human-approved deterministic USD 100 x402 mandate acceptance test:
   - USD 75 -> ALLOW
   - USD 100.01 -> DENY (`amount_limit_exceeded`)
 - `/id bind <erc8004-id>` for verifying/binding an existing QPC ERC-8004 registry entry.
@@ -42,3 +42,7 @@ Focused suite:
 Includes command registry/help/autocomplete/gateway dispatch and QPID lifecycle tests. The dedicated QPID suite is 4/4 passing.
 
 `ruff` was not installed in the execution environment, so ruff lint was not run. Python compilation and the focused pytest suite passed.
+
+## Delegation hardening
+
+The browser-enrollment `qpe_` token is QPID-bound and limited to `agents.read`, `agents.kya`, and `agents.mandate_request`; it intentionally has no `agents.write`. `/id test` first asks a human in Wallet/Console to approve a bounded mandate, then performs the ALLOW/DENY proof.
