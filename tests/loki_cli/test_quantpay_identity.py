@@ -286,3 +286,37 @@ def test_start_replaces_server_canceled_pairing_immediately(qpid_home, monkeypat
     assert calls[0] == ("GET", "/agent-enrollments/QP-OLD2-3456")
     assert calls[1] == ("POST", "/agent-enrollments")
     assert qid.load_state()["enrollment_user_code"] == "QP-NEW2-3456"
+
+
+def test_continue_recovers_missing_stripe_verification_url(qpid_home, monkeypatch):
+    qid.save_state({
+        "agent_id": "11111111-1111-1111-1111-111111111111",
+        "qpid": "qpid_AB8E4825B4D6D709F172232E",
+        "assurance": "qpid1",
+        "verification_session_id": "22222222-2222-2222-2222-222222222222",
+    })
+    qid._atomic_private_json(qid.management_token_path(), {"access_token": "qpe_test"})
+
+    def request(self, method, path, *, json_body=None):
+        if method == "GET" and path.endswith("/credentials"):
+            return {"items": []}
+        if method == "GET" and path.startswith("/agents/"):
+            return {"id": "11111111-1111-1111-1111-111111111111", "qpid": "qpid_AB8E4825B4D6D709F172232E", "assurance": "qpid1"}
+        if method == "POST" and path.endswith("/kya"):
+            raise qid.QuantPayIdentityError("QuantPay ID returned HTTP 400: verified KYC or KYB session is required")
+        if method == "POST" and path.endswith("/kya/stripe"):
+            return {
+                "verificationSessionId": "33333333-3333-3333-3333-333333333333",
+                "status": "requires_input",
+                "verificationUrl": "https://verify.stripe.com/resume-test",
+                "resumedVerification": True,
+            }
+        raise AssertionError(f"unexpected request: {method} {path}")
+
+    monkeypatch.setattr(qid.QuantPayClient, "request", request)
+    result = qid.run_id_command("continue")
+    assert "Stripe KYA is ready to continue" in result
+    assert "https://verify.stripe.com/resume-test" in result
+    state = qid.load_state()
+    assert state["verification_session_id"] == "33333333-3333-3333-3333-333333333333"
+    assert state["verification_url"] == "https://verify.stripe.com/resume-test"

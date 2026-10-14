@@ -567,12 +567,33 @@ def _continue(client: QuantPayClient) -> str:
             )
         except QuantPayIdentityError as exc:
             if "verified KYC or KYB session is required" in str(exc):
-                return (
-                    "Stripe KYA has not reconciled as verified yet.\n"
-                    f"Verification URL: {state.get('verification_url', 'unavailable')}\n"
-                    "Complete the verification (or allow the webhook to reconcile), then run /id continue again."
+                verification = client.request(
+                    "POST", f"/agents/{state['agent_id']}/kya/stripe",
+                    json_body={"requireMatchingSelfie": True},
                 )
-            raise
+                resumed_id = verification.get("verificationSessionId")
+                resumed_url = verification.get("verificationUrl")
+                resumed_status = str(verification.get("status") or "requires_input")
+                if resumed_id:
+                    state["verification_session_id"] = resumed_id
+                if resumed_url:
+                    state["verification_url"] = resumed_url
+                save_state(state)
+                if resumed_status == "verified" and resumed_id:
+                    credential = client.request(
+                        "POST", f"/agents/{state['agent_id']}/kya",
+                        json_body={"verificationSessionId": resumed_id},
+                    )
+                else:
+                    url = state.get("verification_url")
+                    return (
+                        "Stripe KYA is ready to continue.\n"
+                        f"Verification URL: {url or 'temporarily unavailable'}\n"
+                        + ("Open it with /id open, complete verification, then run /id continue again." if url else
+                           "QuantPay could not recover a hosted URL yet; run /id continue again shortly.")
+                    )
+            else:
+                raise
         state["credential_id"] = credential.get("id")
         state["assurance"] = credential.get("assurance", "qpid2")
         save_state(state)
