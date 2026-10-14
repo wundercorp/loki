@@ -368,7 +368,7 @@ _SLACK_RESERVED_COMMANDS = frozenset({
 # parity test reads this set. Aliases are never pinned ahead of canonicals.
 _SLACK_VIA_LOKI_ONLY = frozenset({
     "topup", "moa", "debug", "egress", "init", "version", "diff", "update", "heartbeat",
-    "refine", "review", "pause", "whoami", "platform", "insights", "login"})
+    "refine", "review", "pause", "whoami", "platform", "insights", "login", "curator"})
 
 
 def _sanitize_slack_name(raw: str) -> str:
