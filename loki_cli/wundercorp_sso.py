@@ -18,7 +18,7 @@ from loki_constants import get_loki_home
 from utils import atomic_json_write, warn_if_credential_file_broadly_readable
 
 DEFAULT_SSO_DOMAIN = "https://auth.wundercorp.co"
-DEFAULT_CLIENT_ID = "42s62lgsghpne2r3gf8ret6ojf"
+DEFAULT_CLIENT_ID = "5kg855gamgk38cicro6pfbglcu"
 DEFAULT_REDIRECT_URI = "http://127.0.0.1:48741/auth/callback"
 DEFAULT_SCOPE = "openid email profile"
 DEFAULT_LOGIN_TIMEOUT_SECONDS = 300
@@ -91,9 +91,21 @@ def _token_expiration(token: str) -> int:
         return 0
 
 
+def _state_matches_client(state: dict[str, Any]) -> bool:
+    state_client_id = state.get("_client_id")
+    if isinstance(state_client_id, str) and state_client_id and state_client_id != sso_client_id():
+        return False
+    access_token = state.get("access_token")
+    if isinstance(access_token, str) and access_token:
+        token_client_id = _decode_jwt_payload(access_token).get("client_id")
+        if isinstance(token_client_id, str) and token_client_id and token_client_id != sso_client_id():
+            return False
+    return True
+
+
 def _access_token_usable(state: dict[str, Any], *, skew_seconds: int = TOKEN_REFRESH_SKEW_SECONDS) -> bool:
     access_token = state.get("access_token")
-    if not isinstance(access_token, str) or not access_token:
+    if not isinstance(access_token, str) or not access_token or not _state_matches_client(state):
         return False
     claims = _decode_jwt_payload(access_token)
     if claims.get("token_use") not in (None, "access"):
@@ -124,8 +136,9 @@ def sso_status() -> dict[str, Any]:
     access_token = state.get("access_token")
     refresh_token = state.get("refresh_token")
     expiration = _token_expiration(access_token) if isinstance(access_token, str) else 0
+    state_matches_client = _state_matches_client(state)
     return {
-        "signed_in": bool(_access_token_usable(state, skew_seconds=0) or (isinstance(refresh_token, str) and refresh_token)),
+        "signed_in": bool(state_matches_client and (_access_token_usable(state, skew_seconds=0) or (isinstance(refresh_token, str) and refresh_token))),
         "access_token_valid": _access_token_usable(state, skew_seconds=0),
         "expires_at": expiration or None,
         **_identity_from_state(state),
@@ -163,6 +176,8 @@ def _token_request(data: dict[str, str], *, timeout_seconds: float = 20.0) -> di
 
 def refresh_sso_session(*, timeout_seconds: float = 20.0) -> str | None:
     state = _load_state()
+    if not _state_matches_client(state):
+        return None
     refresh_token = state.get("refresh_token")
     if not isinstance(refresh_token, str) or not refresh_token:
         return None
@@ -177,6 +192,7 @@ def refresh_sso_session(*, timeout_seconds: float = 20.0) -> str | None:
     state.update(payload)
     if not state.get("refresh_token"):
         state["refresh_token"] = refresh_token
+    state["_client_id"] = sso_client_id()
     state["updated_at"] = int(time.time())
     _save_state(state)
     access_token = state.get("access_token")
@@ -272,6 +288,7 @@ def login_sso(*, open_browser: bool = True, timeout_seconds: int = DEFAULT_LOGIN
         "redirect_uri": sso_redirect_uri(),
         "code_verifier": verifier,
     })
+    payload["_client_id"] = sso_client_id()
     payload["updated_at"] = int(time.time())
     _save_state(payload)
     return payload

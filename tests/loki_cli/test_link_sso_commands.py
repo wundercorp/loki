@@ -40,12 +40,62 @@ def test_sso_authorization_url_uses_registered_loopback_and_pkce(monkeypatch):
     parsed = urlparse(url)
     query = parse_qs(parsed.query)
     assert f"{parsed.scheme}://{parsed.netloc}{parsed.path}" == "https://auth.wundercorp.co/oauth2/authorize"
-    assert query["client_id"] == ["42s62lgsghpne2r3gf8ret6ojf"]
+    assert query["client_id"] == ["5kg855gamgk38cicro6pfbglcu"]
     assert query["redirect_uri"] == ["http://127.0.0.1:48741/auth/callback"]
     assert query["scope"] == ["openid email profile"]
     assert query["state"] == ["state-value"]
     assert query["code_challenge"] == ["challenge-value"]
     assert query["code_challenge_method"] == ["S256"]
+
+
+def test_sso_refresh_uses_migrated_client_id(tmp_path, monkeypatch):
+    monkeypatch.setattr(wundercorp_sso, "get_loki_home", lambda: tmp_path)
+    monkeypatch.delenv("LOKI_WUNDERCORP_SSO_CLIENT_ID", raising=False)
+    wundercorp_sso._save_state({"refresh_token": "refresh-token"})
+    captured = {}
+    new_access = _jwt({"token_use": "access", "client_id": "5kg855gamgk38cicro6pfbglcu", "exp": int(time.time()) + 3600})
+
+    def fake_token_request(data, timeout_seconds=20.0):
+        captured.update(data)
+        return {"access_token": new_access}
+
+    monkeypatch.setattr(wundercorp_sso, "_token_request", fake_token_request)
+
+    assert wundercorp_sso.refresh_sso_session() == new_access
+    assert captured["client_id"] == "5kg855gamgk38cicro6pfbglcu"
+    stored = json.loads((tmp_path / "wundercorp-sso.json").read_text())
+    assert stored["_client_id"] == "5kg855gamgk38cicro6pfbglcu"
+
+
+def test_sso_rejects_access_token_from_previous_client_id(monkeypatch):
+    monkeypatch.delenv("LOKI_WUNDERCORP_SSO_CLIENT_ID", raising=False)
+    state = {
+        "access_token": _jwt({
+            "token_use": "access",
+            "client_id": "42s62lgsghpne2r3gf8ret6ojf",
+            "exp": int(time.time()) + 3600,
+        })
+    }
+
+    assert wundercorp_sso._access_token_usable(state) is False
+
+
+def test_sso_status_marks_previous_client_session_signed_out(tmp_path, monkeypatch):
+    monkeypatch.setattr(wundercorp_sso, "get_loki_home", lambda: tmp_path)
+    monkeypatch.delenv("LOKI_WUNDERCORP_SSO_CLIENT_ID", raising=False)
+    wundercorp_sso._save_state({
+        "access_token": _jwt({
+            "token_use": "access",
+            "client_id": "42s62lgsghpne2r3gf8ret6ojf",
+            "exp": int(time.time()) + 3600,
+        }),
+        "refresh_token": "old-refresh-token",
+    })
+
+    status = wundercorp_sso.sso_status()
+
+    assert status["signed_in"] is False
+    assert status["access_token_valid"] is False
 
 
 def test_sso_refresh_preserves_refresh_token(tmp_path, monkeypatch):
@@ -114,6 +164,55 @@ def test_link_address_uses_shipping_addresses_endpoint(monkeypatch):
 
     assert calls == ["shipping-addresses"]
     assert any('"city": "New York"' in output for output in outputs)
+
+
+def test_link_cli_routes_all_general_commands(monkeypatch):
+    from loki_cli import cli_commands_mixin as commands_mixin
+    from loki_cli.cli_commands_mixin import CLICommandsMixin
+
+    calls = []
+    outputs = []
+
+    monkeypatch.setattr(commands_mixin, "_cp", lambda *lines: outputs.extend(lines))
+    monkeypatch.setattr(link_connection, "connect_link", lambda: calls.append("connect") or {"connected": True})
+    monkeypatch.setattr(link_connection, "disconnect_link", lambda: calls.append("disconnect") or {"connected": False, "revoked": True})
+    monkeypatch.setattr(link_connection, "link_status", lambda interactive_sso=False: calls.append(("status", interactive_sso)) or {"connected": True})
+    monkeypatch.setattr(link_connection, "link_user_info", lambda: calls.append("user") or {"user": {}})
+    monkeypatch.setattr(link_connection, "link_payment_methods", lambda: calls.append("payment-methods") or {"payment_methods": []})
+    monkeypatch.setattr(link_connection, "link_shipping_addresses", lambda: calls.append("address") or {"addresses": []})
+
+    class Worker:
+        def __init__(self, produce):
+            self.produce = produce
+
+        def start(self):
+            outputs.append(self.produce())
+
+    class Stub:
+        _app = True
+
+        def _side_worker(self, produce, **kwargs):
+            return Worker(produce)
+
+    stub = Stub()
+    for command in (
+        "/link status",
+        "/link connect",
+        "/link disconnect",
+        "/link user",
+        "/link payment-methods",
+        "/link address",
+    ):
+        CLICommandsMixin._handle_link_command(stub, command)
+
+    assert calls == [
+        ("status", False),
+        "connect",
+        "disconnect",
+        "user",
+        "payment-methods",
+        "address",
+    ]
 
 
 def test_link_shipping_addresses_helper_calls_shipping_endpoint(monkeypatch):
