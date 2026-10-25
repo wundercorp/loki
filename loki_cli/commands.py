@@ -306,7 +306,7 @@ COMMAND_REGISTRY: list[CommandDef] = [
     CommandDef("sso", "Manage WunderCorp browser SSO for connected services", "Info",
                args_hint="[status|login|logout]", subcommands=("status", "login", "logout"),
                cli_only=True, busy_policy="dispatch", desktop="terminal"),
-    CommandDef("id", "Create and manage this Loki agent's QuantPay ID (QPID)", "Tools & Skills",
+    CommandDef("id", "Create and manage this Loki agent's AgentVerified ID (QPID)", "Tools & Skills",
                args_hint="[status|start [--console] [name]|continue|test|bind|doctor|open|help]",
                subcommands=("status", "start", "continue", "test", "bind", "doctor", "open", "help")),
     CommandDef("link", "Manage your Link wallet connection", "Info", aliases=("wallet",),

@@ -1,4 +1,4 @@
-"""Gateway /id command: QuantPay ID lifecycle for the running Loki profile."""
+"""Gateway /id command: AgentVerified ID lifecycle for the running Loki profile."""
 
 from __future__ import annotations
 

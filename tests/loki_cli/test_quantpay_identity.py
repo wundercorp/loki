@@ -44,9 +44,9 @@ def test_start_uses_public_device_enrollment_without_human_bearer_token(qpid_hom
         return {
             "deviceCode": "qpd_device_code_for_test_abcdefghijklmnopqrstuvwxyz",
             "userCode": "QP-ABCD-2345",
-            "verificationUriComplete": "https://wallet.quantpay.sh/?qpid_enroll=QP-ABCD-2345",
-            "walletVerificationUriComplete": "https://wallet.quantpay.sh/?qpid_enroll=QP-ABCD-2345",
-            "consoleVerificationUriComplete": "https://console.quantpay.sh/?qpid_enroll=QP-ABCD-2345",
+            "verificationUriComplete": "https://agentverified.sh/?qpid_enroll=QP-ABCD-2345",
+            "walletVerificationUriComplete": "https://agentverified.sh/?qpid_enroll=QP-ABCD-2345",
+            "consoleVerificationUriComplete": "https://console.agentverified.sh/?qpid_enroll=QP-ABCD-2345",
             "expiresIn": 900,
             "interval": 3,
         }
@@ -54,9 +54,9 @@ def test_start_uses_public_device_enrollment_without_human_bearer_token(qpid_hom
     monkeypatch.setattr(qid.QuantPayClient, "public_request", public_request)
 
     result = qid.run_id_command("start Loki Production Agent")
-    assert "QuantPay ID enrollment started" in result
+    assert "AgentVerified ID enrollment started" in result
     assert "QP-ABCD-2345" in result
-    assert "wallet.quantpay.sh" in result
+    assert "agentverified.sh" in result
     assert "No Cognito bearer token needs to be copied into Loki" in result
     assert captured["name"] == "Loki Production Agent"
     assert captured["surface"] == "wallet"
@@ -73,9 +73,9 @@ def test_start_business_prefers_console_surface(qpid_home, monkeypatch):
         return {
             "deviceCode": "qpd_device_code_for_test_abcdefghijklmnopqrstuvwxyz",
             "userCode": "QP-WXYZ-6789",
-            "verificationUriComplete": "https://console.quantpay.sh/?qpid_enroll=QP-WXYZ-6789",
-            "walletVerificationUriComplete": "https://wallet.quantpay.sh/?qpid_enroll=QP-WXYZ-6789",
-            "consoleVerificationUriComplete": "https://console.quantpay.sh/?qpid_enroll=QP-WXYZ-6789",
+            "verificationUriComplete": "https://console.agentverified.sh/?qpid_enroll=QP-WXYZ-6789",
+            "walletVerificationUriComplete": "https://agentverified.sh/?qpid_enroll=QP-WXYZ-6789",
+            "consoleVerificationUriComplete": "https://console.agentverified.sh/?qpid_enroll=QP-WXYZ-6789",
             "expiresIn": 900,
         }
 
@@ -83,7 +83,7 @@ def test_start_business_prefers_console_surface(qpid_home, monkeypatch):
     result = qid.run_id_command("start --business Finance Loki")
     assert captured["surface"] == "console"
     assert captured["name"] == "Finance Loki"
-    assert "console.quantpay.sh" in result
+    assert "console.agentverified.sh" in result
 
 
 def test_full_qpid_lifecycle_device_exchange_holder_proof_and_allow_deny(qpid_home, monkeypatch):
@@ -105,9 +105,9 @@ def test_full_qpid_lifecycle_device_exchange_holder_proof_and_allow_deny(qpid_ho
             return {
                 "deviceCode": "qpd_device_code_for_test_abcdefghijklmnopqrstuvwxyz",
                 "userCode": "QP-ABCD-2345",
-                "verificationUriComplete": "https://wallet.quantpay.sh/?qpid_enroll=QP-ABCD-2345",
-                "walletVerificationUriComplete": "https://wallet.quantpay.sh/?qpid_enroll=QP-ABCD-2345",
-                "consoleVerificationUriComplete": "https://console.quantpay.sh/?qpid_enroll=QP-ABCD-2345",
+                "verificationUriComplete": "https://agentverified.sh/?qpid_enroll=QP-ABCD-2345",
+                "walletVerificationUriComplete": "https://agentverified.sh/?qpid_enroll=QP-ABCD-2345",
+                "consoleVerificationUriComplete": "https://console.agentverified.sh/?qpid_enroll=QP-ABCD-2345",
                 "expiresIn": 900,
             }
         if method == "POST" and path == "/agent-enrollments/token":
@@ -180,7 +180,7 @@ def test_full_qpid_lifecycle_device_exchange_holder_proof_and_allow_deny(qpid_ho
             return {
                 "requestCode": "QPM-TEST-2345",
                 "status": "pending",
-                "approvalUrl": "https://wallet.quantpay.sh/?qpid_mandate=QPM-TEST-2345",
+                "approvalUrl": "https://agentverified.sh/?qpid_mandate=QPM-TEST-2345",
             }
         if method == "POST" and path == "/agents/authorize":
             assert json_body["agentProof"].count(".") == 2
@@ -243,7 +243,7 @@ def test_continue_reports_pending_human_approval(qpid_home, monkeypatch):
     state = {
         "enrollment_device_code": "qpd_device_code_for_test_abcdefghijklmnopqrstuvwxyz",
         "enrollment_user_code": "QP-ABCD-2345",
-        "enrollment_url": "https://wallet.quantpay.sh/?qpid_enroll=QP-ABCD-2345",
+        "enrollment_url": "https://agentverified.sh/?qpid_enroll=QP-ABCD-2345",
         "enrollment_expires_at_epoch": 9999999999,
     }
     qid.save_state(state)
@@ -254,7 +254,7 @@ def test_continue_reports_pending_human_approval(qpid_home, monkeypatch):
     monkeypatch.setattr(qid.QuantPayClient, "public_request", public_request)
     result = qid.run_id_command("continue")
     assert "waiting for human approval" in result
-    assert "wallet.quantpay.sh" in result
+    assert "agentverified.sh" in result
     assert not qid.management_token_path().exists()
 
 
@@ -262,7 +262,7 @@ def test_start_replaces_server_canceled_pairing_immediately(qpid_home, monkeypat
     qid.save_state({
         "enrollment_device_code": "qpd_old_device_code_abcdefghijklmnopqrstuvwxyz",
         "enrollment_user_code": "QP-OLD2-3456",
-        "enrollment_url": "https://wallet.quantpay.sh/?qpid_enroll=QP-OLD2-3456",
+        "enrollment_url": "https://agentverified.sh/?qpid_enroll=QP-OLD2-3456",
         "enrollment_expires_at_epoch": 9999999999,
     })
     calls = []
@@ -274,9 +274,9 @@ def test_start_replaces_server_canceled_pairing_immediately(qpid_home, monkeypat
         return {
             "deviceCode": "qpd_fresh_device_code_abcdefghijklmnopqrstuvwxyz",
             "userCode": "QP-NEW2-3456",
-            "verificationUriComplete": "https://wallet.quantpay.sh/?qpid_enroll=QP-NEW2-3456",
-            "walletVerificationUriComplete": "https://wallet.quantpay.sh/?qpid_enroll=QP-NEW2-3456",
-            "consoleVerificationUriComplete": "https://console.quantpay.sh/?qpid_enroll=QP-NEW2-3456",
+            "verificationUriComplete": "https://agentverified.sh/?qpid_enroll=QP-NEW2-3456",
+            "walletVerificationUriComplete": "https://agentverified.sh/?qpid_enroll=QP-NEW2-3456",
+            "consoleVerificationUriComplete": "https://console.agentverified.sh/?qpid_enroll=QP-NEW2-3456",
             "expiresIn": 900,
         }
 
@@ -303,7 +303,7 @@ def test_continue_recovers_missing_stripe_verification_url(qpid_home, monkeypatc
         if method == "GET" and path.startswith("/agents/"):
             return {"id": "11111111-1111-1111-1111-111111111111", "qpid": "qpid_AB8E4825B4D6D709F172232E", "assurance": "qpid1"}
         if method == "POST" and path.endswith("/kya"):
-            raise qid.QuantPayIdentityError("QuantPay ID returned HTTP 400: verified KYC or KYB session is required")
+            raise qid.QuantPayIdentityError("AgentVerified ID returned HTTP 400: verified KYC or KYB session is required")
         if method == "POST" and path.endswith("/kya/stripe"):
             return {
                 "verificationSessionId": "33333333-3333-3333-3333-333333333333",

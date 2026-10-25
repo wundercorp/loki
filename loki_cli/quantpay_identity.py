@@ -1,6 +1,6 @@
-"""QuantPay ID (QPID) lifecycle helpers used by Loki's /id command.
+"""AgentVerified ID (QPID) lifecycle helpers used by Loki's /id command.
 
-The holder private key is generated locally and never sent to QuantPay.  Remote
+The holder private key is generated locally and never sent to AgentVerified.  Remote
 requests only contain the public JWK or signatures produced by the holder key.
 """
 
@@ -24,8 +24,8 @@ from cryptography.hazmat.primitives.asymmetric import ec
 
 from loki_constants import get_loki_home
 
-DEFAULT_API_URL = "https://quantpay.sh/v1"
-DEFAULT_ISSUER_URL = "https://id.quantpay.sh"
+DEFAULT_API_URL = "https://agentverified.sh/v1"
+DEFAULT_ISSUER_URL = "https://id.agentverified.sh"
 OPENID4VCI_GRANT = "urn:ietf:params:oauth:grant-type:pre-authorized_code"
 CREDENTIAL_CONFIGURATION_ID = "QuantPayAgentCredential"
 QPC_CHAIN_ID = 1716125
@@ -75,7 +75,7 @@ def generate_es256_jwk() -> tuple[dict[str, Any], dict[str, Any]]:
 
 def _ec_private_key(private_jwk: dict[str, Any]):
     if private_jwk.get("kty") != "EC" or private_jwk.get("crv") != "P-256" or not private_jwk.get("d"):
-        raise QuantPayIdentityError("The stored QuantPay holder key is not a P-256 private JWK")
+        raise QuantPayIdentityError("The stored AgentVerified holder key is not a P-256 private JWK")
     value = int.from_bytes(_b64url_decode(str(private_jwk["d"])), "big")
     return ec.derive_private_key(value, ec.SECP256R1())
 
@@ -224,7 +224,7 @@ def ensure_holder_key() -> tuple[dict[str, Any], dict[str, Any]]:
     existing = _load_json(key_path())
     if existing:
         if _private_fields(existing) != {"d"}:
-            raise QuantPayIdentityError("Stored QuantPay holder JWK is malformed")
+            raise QuantPayIdentityError("Stored AgentVerified holder JWK is malformed")
         return public_jwk(existing), existing
     public, private = generate_es256_jwk()
     _atomic_private_json(key_path(), private)
@@ -252,11 +252,11 @@ class QuantPayClient:
         token_record = _load_json(management_token_path())
         local_management_token = str(token_record.get("access_token") or "").strip()
         return cls(
-            api_url=value("QUANTPAY_API_URL", DEFAULT_API_URL).rstrip("/"),
-            issuer_url=value("QUANTPAY_IDENTITY_ISSUER_URL", DEFAULT_ISSUER_URL).rstrip("/"),
-            access_token=value("QUANTPAY_ACCESS_TOKEN") or local_management_token,
-            api_key=value("QUANTPAY_API_KEY"),
-            organization_id=value("QUANTPAY_ORGANIZATION_ID"),
+            api_url=(value("AGENTVERIFIED_API_URL") or value("QUANTPAY_API_URL", DEFAULT_API_URL)).rstrip("/"),
+            issuer_url=(value("AGENTVERIFIED_IDENTITY_ISSUER_URL") or value("QUANTPAY_IDENTITY_ISSUER_URL", DEFAULT_ISSUER_URL)).rstrip("/"),
+            access_token=value("AGENTVERIFIED_ACCESS_TOKEN") or value("QUANTPAY_ACCESS_TOKEN") or local_management_token,
+            api_key=value("AGENTVERIFIED_API_KEY") or value("QUANTPAY_API_KEY"),
+            organization_id=value("AGENTVERIFIED_ORGANIZATION_ID") or value("QUANTPAY_ORGANIZATION_ID"),
         )
 
     @property
@@ -266,7 +266,7 @@ class QuantPayClient:
     def require_management_auth(self) -> None:
         if not self.authenticated:
             raise QuantPayIdentityError(
-                "QPID is waiting for QuantPay approval. Run /id start to create an enrollment, approve it in "
+                "QPID is waiting for AgentVerified approval. Run /id start to create an enrollment, approve it in "
                 "Wallet or Console, then run /id continue. Human Cognito bearer tokens are not required in Loki."
             )
 
@@ -283,7 +283,7 @@ class QuantPayClient:
     def request(self, method: str, path: str, *, json_body: Any = None) -> dict[str, Any]:
         if not self.authenticated:
             raise QuantPayIdentityError(
-                "QuantPay agent management authorization is not available. Run /id start, approve the enrollment in "
+                "AgentVerified agent management authorization is not available. Run /id start, approve the enrollment in "
                 "Wallet or Console, then run /id continue. Human Cognito bearer tokens are not required in Loki."
             )
         try:
@@ -295,8 +295,8 @@ class QuantPayClient:
                 timeout=30.0,
             )
         except httpx.HTTPError as exc:
-            raise QuantPayIdentityError(f"QuantPay request failed: {exc}") from exc
-        return _decode_response(response, "QuantPay ID")
+            raise QuantPayIdentityError(f"AgentVerified request failed: {exc}") from exc
+        return _decode_response(response, "AgentVerified ID")
 
     def public_request(self, method: str, path: str, *, json_body: Any = None) -> dict[str, Any]:
         try:
@@ -308,8 +308,8 @@ class QuantPayClient:
                 timeout=30.0,
             )
         except httpx.HTTPError as exc:
-            raise QuantPayIdentityError(f"QuantPay enrollment request failed: {exc}") from exc
-        return _decode_response(response, "QuantPay enrollment")
+            raise QuantPayIdentityError(f"AgentVerified enrollment request failed: {exc}") from exc
+        return _decode_response(response, "AgentVerified enrollment")
 
     def issuer_request(self, method: str, path: str, *, json_body: Any = None,
                        bearer: str = "") -> dict[str, Any]:
@@ -325,8 +325,8 @@ class QuantPayClient:
                 timeout=30.0,
             )
         except httpx.HTTPError as exc:
-            raise QuantPayIdentityError(f"QuantPay issuer request failed: {exc}") from exc
-        return _decode_response(response, "QuantPay credential issuer")
+            raise QuantPayIdentityError(f"AgentVerified issuer request failed: {exc}") from exc
+        return _decode_response(response, "AgentVerified credential issuer")
 
 
 def _decode_response(response: httpx.Response, label: str) -> dict[str, Any]:
@@ -374,19 +374,19 @@ def _format_status(client: QuantPayClient, state: dict[str, Any]) -> str:
             if remote_status in {"expired", "canceled"}:
                 _clear_pending_enrollment(state)
                 save_state(state)
-                return f"QuantPay ID: enrollment {remote_status}. Run /id start to create a fresh pairing."
+                return f"AgentVerified ID: enrollment {remote_status}. Run /id start to create a fresh pairing."
             next_step = "Approval received. Run /id continue to claim the scoped QPID token." if remote_status == "approved" else "After approval / Stripe verification, run /id continue."
             return (
-                f"QuantPay ID: enrollment {remote_status}\n"
+                f"AgentVerified ID: enrollment {remote_status}\n"
                 f"Pairing code: {state.get('enrollment_user_code', 'unknown')}\n"
                 f"Approve: {state.get('enrollment_url', 'approval link unavailable')}\n"
                 f"{next_step}\n"
                 f"Holder key: {key_path()} (private, local only)"
             )
         return (
-            "QuantPay ID: not initialized\n"
-            "Run /id start to generate Loki's holder key and create a secure QuantPay enrollment.\n"
-            "The private holder key stays under Loki home and is never sent to QuantPay."
+            "AgentVerified ID: not initialized\n"
+            "Run /id start to generate Loki's holder key and create a secure AgentVerified enrollment.\n"
+            "The private holder key stays under Loki home and is never sent to AgentVerified."
         )
     agent: dict[str, Any] = {}
     credentials: list[Any] = []
@@ -403,12 +403,12 @@ def _format_status(client: QuantPayClient, state: dict[str, Any]) -> str:
         except QuantPayIdentityError as exc:
             remote_note = f"\nRemote status unavailable: {exc}"
     else:
-        remote_note = "\nRemote status skipped: QuantPay authentication is not configured in this process."
+        remote_note = "\nRemote status skipped: AgentVerified authentication is not configured in this process."
     assurance = str(agent.get("assurance") or state.get("assurance") or "qpid1")
     erc = agent.get("erc8004") if agent else None
     credential_saved = credential_path().exists()
     lines = [
-        "QuantPay ID",
+        "AgentVerified ID",
         f"QPID: {state.get('qpid', 'unknown')}",
         f"Assurance: {assurance}",
         f"Holder key: {key_path()} (private, local only)",
@@ -421,7 +421,7 @@ def _format_status(client: QuantPayClient, state: dict[str, Any]) -> str:
     if _assurance_rank(assurance) < 2 and state.get("verification_url"):
         lines += ["", f"Complete Stripe KYA: {state['verification_url']}", "Then run /id continue."]
     elif _assurance_rank(assurance) >= 2 and not credential_saved:
-        lines += ["", "Next: /id continue to obtain the holder-bound QuantPay Agent Credential."]
+        lines += ["", "Next: /id continue to obtain the holder-bound AgentVerified Agent Credential."]
     elif credential_saved:
         lines += ["", "Next: /id test [merchant] to prove deterministic ALLOW/DENY authorization."]
     return "\n".join(lines) + remote_note
@@ -477,18 +477,18 @@ def _start(client: QuantPayClient, name: str, surface: str = "wallet") -> str:
             "created_at": state.get("created_at") or _utc_now(),
         })
         if not state.get("enrollment_device_code") or not state.get("enrollment_user_code"):
-            raise QuantPayIdentityError("QuantPay enrollment did not return a device/user code")
+            raise QuantPayIdentityError("AgentVerified enrollment did not return a device/user code")
         save_state(state)
 
     preferred = state.get("enrollment_url") or state.get("enrollment_wallet_url") or state.get("enrollment_console_url")
     return (
-        "QuantPay ID enrollment started.\n"
+        "AgentVerified ID enrollment started.\n"
         f"Pairing code: {state.get('enrollment_user_code')}\n"
         f"Approve this Loki agent: {preferred}\n\n"
-        f"Personal / Wallet: {state.get('enrollment_wallet_url', 'unavailable')}\n"
-        f"Business / Console: {state.get('enrollment_console_url', 'unavailable')}\n\n"
+        f"Personal approval: {state.get('enrollment_wallet_url', 'unavailable')}\n"
+        f"Business approval: {state.get('enrollment_console_url', 'unavailable')}\n\n"
         f"Holder key: {key_path()} (mode 0600; never uploaded)\n"
-        "Sign in and approve in QuantPay. If identity verification is needed, the web flow opens Stripe. "
+        "Sign in and approve in AgentVerified. If identity verification is needed, the web flow opens Stripe. "
         "Then run /id continue. No Cognito bearer token needs to be copied into Loki."
     )
 
@@ -508,7 +508,7 @@ def _exchange_enrollment(client: QuantPayClient, state: dict[str, Any]) -> bool:
     status = str(result.get("status") or "")
     if status == "authorization_pending":
         raise QuantPayIdentityError(
-            f"QPID enrollment is waiting for human approval. Open {state.get('enrollment_url', 'the QuantPay approval link')} "
+            f"QPID enrollment is waiting for human approval. Open {state.get('enrollment_url', 'the AgentVerified approval link')} "
             "and then run /id continue again."
         )
     if status in {"expired", "canceled"}:
@@ -517,7 +517,7 @@ def _exchange_enrollment(client: QuantPayClient, state: dict[str, Any]) -> bool:
         raise QuantPayIdentityError(f"QPID enrollment is {status}. Run /id start again.")
     token = str(result.get("accessToken") or "")
     if status != "approved" or not token:
-        raise QuantPayIdentityError("QuantPay enrollment approval did not return a scoped agent token")
+        raise QuantPayIdentityError("AgentVerified enrollment approval did not return a scoped agent token")
     _atomic_private_json(management_token_path(), {
         "access_token": token,
         "token_type": result.get("tokenType", "Bearer"),
@@ -590,7 +590,7 @@ def _continue(client: QuantPayClient) -> str:
                         "Stripe KYA is ready to continue.\n"
                         f"Verification URL: {url or 'temporarily unavailable'}\n"
                         + ("Open it with /id open, complete verification, then run /id continue again." if url else
-                           "QuantPay could not recover a hosted URL yet; run /id continue again shortly.")
+                           "AgentVerified could not recover a hosted URL yet; run /id continue again shortly.")
                     )
             else:
                 raise
@@ -598,7 +598,7 @@ def _continue(client: QuantPayClient) -> str:
         state["assurance"] = credential.get("assurance", "qpid2")
         save_state(state)
     if credential is None or not credential.get("id"):
-        raise QuantPayIdentityError("QPID2 is active but no active QuantPay Agent Credential was found")
+        raise QuantPayIdentityError("QPID2 is active but no active AgentVerified Agent Credential was found")
     state["credential_id"] = credential["id"]
     state["assurance"] = credential.get("assurance", state.get("assurance", "qpid2"))
     if credential_path().exists():
@@ -699,7 +699,7 @@ def _test(client: QuantPayClient, merchant: str) -> str:
             return (
                 "QPID test mandate is waiting for human approval.\n"
                 f"Approval code: {request_code}\n"
-                f"Approve: {state.get('test_mandate_approval_url', 'open the QuantPay approval link')}\n"
+                f"Approve: {state.get('test_mandate_approval_url', 'open the AgentVerified approval link')}\n"
                 "After approval, run /id test again. The agent cannot grant itself spending authority."
             )
         else:
@@ -723,7 +723,7 @@ def _test(client: QuantPayClient, merchant: str) -> str:
         request_code = str(mandate_request.get("requestCode") or "")
         approval_url = str(mandate_request.get("approvalUrl") or "")
         if not request_code or not approval_url:
-            raise QuantPayIdentityError("QuantPay did not return a mandate approval code/link")
+            raise QuantPayIdentityError("AgentVerified did not return a mandate approval code/link")
         state["test_mandate_request_code"] = request_code
         state["test_mandate_approval_url"] = approval_url
         state["test_merchant"] = merchant
@@ -755,7 +755,7 @@ def _test(client: QuantPayClient, merchant: str) -> str:
 def _bind(client: QuantPayClient, erc8004_agent_id: str) -> str:
     client.require_management_auth()
     if client.access_token.startswith("qpe_"):
-        raise QuantPayIdentityError("ERC-8004 binding is a principal/admin action and is intentionally unavailable to the scoped agent enrollment token. Bind it from QuantPay Console or use an admin API credential.")
+        raise QuantPayIdentityError("ERC-8004 binding is a principal/admin action and is intentionally unavailable to the scoped agent enrollment token. Bind it from AgentVerified Console or use an admin API credential.")
     if not erc8004_agent_id.isdigit():
         raise QuantPayIdentityError("Usage: /id bind <erc8004-agent-id>")
     state = load_state()
@@ -784,12 +784,12 @@ def _doctor(client: QuantPayClient) -> str:
             checks.append(f"{label}: ok ({len(payload)} top-level fields)")
         except QuantPayIdentityError as exc:
             checks.append(f"{label}: FAILED ({exc})")
-    return "QuantPay ID doctor\n" + "\n".join(checks)
+    return "AgentVerified ID doctor\n" + "\n".join(checks)
 
 
-_HELP = """QuantPay ID for Loki
+_HELP = """AgentVerified ID for Loki
 /id status                 Show local + live QPID state
-/id start [name]           Generate holder key and start Wallet browser enrollment
+/id start [name]           Generate holder key and start AgentVerified browser enrollment
 /id continue               Exchange approval, reconcile KYA, issue QPID2 + holder-bound credential
 /id test [merchant]        Request a human-approved $100 x402 mandate, then prove $75 ALLOW / $100.01 DENY
 /id bind <erc8004-id>      Admin-only: verify/bind an existing QPC ERC-8004 registry entry
@@ -798,7 +798,7 @@ _HELP = """QuantPay ID for Loki
 /id help                   Show this help
 
 Auth: /id start uses a short-lived browser enrollment. Human Cognito bearer tokens never need to enter Loki.
-Private holder key: stored mode 0600 under Loki home; never uploaded to QuantPay."""
+Private holder key: stored mode 0600 under Loki home; never uploaded to AgentVerified."""
 
 
 def run_id_command(raw_args: str = "") -> str:
@@ -830,8 +830,8 @@ def run_id_command(raw_args: str = "") -> str:
             state = load_state()
             url = state.get("test_mandate_approval_url") or state.get("verification_url") or state.get("enrollment_url")
             if state.get("test_mandate_approval_url"):
-                return f"QuantPay mandate approval: {url}\nAfter approval, run /id test again."
-            return f"QuantPay ID approval: {url}\nAfter approval / verification, run /id continue." if url else "No pending QPID approval URL. Run /id start."
+                return f"AgentVerified mandate approval: {url}\nAfter approval, run /id test again."
+            return f"AgentVerified ID approval: {url}\nAfter approval / verification, run /id continue." if url else "No pending QPID approval URL. Run /id start."
         return f"Unknown /id action: {action}\n\n{_HELP}"
     except QuantPayIdentityError as exc:
-        return f"QuantPay ID: {exc}"
+        return f"AgentVerified ID: {exc}"
