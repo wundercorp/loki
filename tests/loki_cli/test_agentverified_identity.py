@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from loki_cli import quantpay_identity as qid
+from loki_cli import agentverified_identity as qid
 from loki_cli.commands import resolve_command
 
 
@@ -13,8 +13,10 @@ from loki_cli.commands import resolve_command
 def qpid_home(tmp_path, monkeypatch):
     home = tmp_path / "loki"
     monkeypatch.setattr(qid, "get_loki_home", lambda: home)
-    monkeypatch.delenv("QUANTPAY_ACCESS_TOKEN", raising=False)
-    monkeypatch.delenv("QUANTPAY_API_KEY", raising=False)
+    monkeypatch.delenv("AGENTVERIFIED_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("AGENTVERIFIED_API_KEY", raising=False)
+    monkeypatch.delenv("AGENTVERIFIED_ACCESS_TOKEN", raising=False)
+    monkeypatch.delenv("AGENTVERIFIED_API_KEY", raising=False)
     return home
 
 
@@ -23,7 +25,9 @@ def test_id_command_registered_and_completable():
     assert cmd is not None
     assert cmd.name == "id"
     assert "continue" in cmd.subcommands
-    assert "test" in cmd.subcommands
+    assert "doctor" in cmd.subcommands
+    assert "test" not in cmd.subcommands
+    assert "bind" not in cmd.subcommands
 
 
 def test_holder_key_is_private_and_public_projection_has_no_private_material(qpid_home):
@@ -51,7 +55,7 @@ def test_start_uses_public_device_enrollment_without_human_bearer_token(qpid_hom
             "interval": 3,
         }
 
-    monkeypatch.setattr(qid.QuantPayClient, "public_request", public_request)
+    monkeypatch.setattr(qid.AgentVerifiedClient, "public_request", public_request)
 
     result = qid.run_id_command("start Loki Production Agent")
     assert "AgentVerified ID enrollment started" in result
@@ -79,20 +83,19 @@ def test_start_business_prefers_console_surface(qpid_home, monkeypatch):
             "expiresIn": 900,
         }
 
-    monkeypatch.setattr(qid.QuantPayClient, "public_request", public_request)
+    monkeypatch.setattr(qid.AgentVerifiedClient, "public_request", public_request)
     result = qid.run_id_command("start --business Finance Loki")
     assert captured["surface"] == "console"
     assert captured["name"] == "Finance Loki"
     assert "console.agentverified.sh" in result
 
 
-def test_full_qpid_lifecycle_device_exchange_holder_proof_and_allow_deny(qpid_home, monkeypatch):
+def test_full_agentverified_identity_lifecycle(qpid_home, monkeypatch):
     remote = {
         "agent": None,
         "credential": None,
         "enrollment_body": None,
         "token_exchange_count": 0,
-        "mandate_status": "pending",
     }
 
     agent_id = "11111111-1111-1111-1111-111111111111"
@@ -125,7 +128,6 @@ def test_full_qpid_lifecycle_device_exchange_holder_proof_and_allow_deny(qpid_ho
                 "qpid": "qpid_0123456789ABCDEF01234567",
                 "assurance": "qpid1",
                 "status": "active",
-                "erc8004": None,
             }
             return {
                 "status": "approved",
@@ -136,15 +138,6 @@ def test_full_qpid_lifecycle_device_exchange_holder_proof_and_allow_deny(qpid_ho
                 "qpid": remote["agent"]["qpid"],
                 "assurance": "qpid1",
                 "verificationSessionId": verification_id,
-            }
-        if method == "GET" and path == "/agent-mandate-requests/QPM-TEST-2345":
-            if remote["mandate_status"] == "pending":
-                return {"requestCode": "QPM-TEST-2345", "status": "pending"}
-            return {
-                "requestCode": "QPM-TEST-2345",
-                "status": "approved",
-                "mandateId": "55555555-5555-5555-5555-555555555555",
-                "mandateHash": "m" * 43,
             }
         raise AssertionError(f"unexpected public API request: {method} {path}")
 
@@ -174,19 +167,6 @@ def test_full_qpid_lifecycle_device_exchange_holder_proof_and_allow_deny(qpid_ho
                     }
                 },
             }
-        if method == "POST" and path == f"/agents/{agent_id}/mandate-requests":
-            assert json_body["amountLimitMinor"] == "10000"
-            assert json_body["surface"] == "wallet"
-            return {
-                "requestCode": "QPM-TEST-2345",
-                "status": "pending",
-                "approvalUrl": "https://agentverified.sh/?qpid_mandate=QPM-TEST-2345",
-            }
-        if method == "POST" and path == "/agents/authorize":
-            assert json_body["agentProof"].count(".") == 2
-            if json_body["amountMinor"] == "7500":
-                return {"valid": True, "decision": "allow", "reasons": []}
-            return {"valid": False, "decision": "deny", "reasons": ["amount_limit_exceeded"]}
         raise AssertionError(f"unexpected authenticated API request: {method} {path}")
 
     def issuer_request(self, method, path, *, json_body=None, bearer=""):
@@ -204,9 +184,9 @@ def test_full_qpid_lifecycle_device_exchange_holder_proof_and_allow_deny(qpid_ho
             return {"credentials": [{"credential": {"media_type": "application/vc+jwt", "credential": {"id": "vc1"}}}]}
         raise AssertionError(f"unexpected issuer request: {method} {path}")
 
-    monkeypatch.setattr(qid.QuantPayClient, "public_request", public_request)
-    monkeypatch.setattr(qid.QuantPayClient, "request", request)
-    monkeypatch.setattr(qid.QuantPayClient, "issuer_request", issuer_request)
+    monkeypatch.setattr(qid.AgentVerifiedClient, "public_request", public_request)
+    monkeypatch.setattr(qid.AgentVerifiedClient, "request", request)
+    monkeypatch.setattr(qid.AgentVerifiedClient, "issuer_request", issuer_request)
 
     started = qid.run_id_command("start Loki Production Agent")
     assert "enrollment started" in started
@@ -216,7 +196,7 @@ def test_full_qpid_lifecycle_device_exchange_holder_proof_and_allow_deny(qpid_ho
     assert sent_jwk["kid"]
 
     continued = qid.run_id_command("continue")
-    assert "QPID2 credential issued" in continued
+    assert "AgentVerified credential issued" in continued
     assert remote["token_exchange_count"] == 1
     assert qid.management_token_path().exists()
     management = json.loads(qid.management_token_path().read_text())
@@ -226,17 +206,11 @@ def test_full_qpid_lifecycle_device_exchange_holder_proof_and_allow_deny(qpid_ho
     credential = json.loads(qid.credential_path().read_text())
     assert credential["credential"]["credential"]["id"] == "vc1"
 
-    requested = qid.run_id_command("test loki.computer")
-    assert "Human approval is required" in requested
-    assert "QPM-TEST-2345" in requested
-    assert "qpid_mandate=QPM-TEST-2345" in requested
-
-    remote["mandate_status"] = "approved"
-    tested = qid.run_id_command("test loki.computer")
-    assert "PASS" in tested
-    assert "$75.00 -> ALLOW" in tested
-    assert "$100.01 -> DENY" in tested
-    assert "amount_limit_exceeded" in tested
+    status = qid.run_id_command("status")
+    assert "AgentVerified ID" in status
+    assert "Agent ID:" in status
+    assert "ERC-8004" not in status
+    assert "x402" not in status
 
 
 def test_continue_reports_pending_human_approval(qpid_home, monkeypatch):
@@ -251,7 +225,7 @@ def test_continue_reports_pending_human_approval(qpid_home, monkeypatch):
     def public_request(self, method, path, *, json_body=None):
         return {"status": "authorization_pending", "interval": 3}
 
-    monkeypatch.setattr(qid.QuantPayClient, "public_request", public_request)
+    monkeypatch.setattr(qid.AgentVerifiedClient, "public_request", public_request)
     result = qid.run_id_command("continue")
     assert "waiting for human approval" in result
     assert "agentverified.sh" in result
@@ -280,7 +254,7 @@ def test_start_replaces_server_canceled_pairing_immediately(qpid_home, monkeypat
             "expiresIn": 900,
         }
 
-    monkeypatch.setattr(qid.QuantPayClient, "public_request", public_request)
+    monkeypatch.setattr(qid.AgentVerifiedClient, "public_request", public_request)
     result = qid.run_id_command("start Loki Production Agent")
     assert "QP-NEW2-3456" in result
     assert calls[0] == ("GET", "/agent-enrollments/QP-OLD2-3456")
@@ -303,7 +277,7 @@ def test_continue_recovers_missing_stripe_verification_url(qpid_home, monkeypatc
         if method == "GET" and path.startswith("/agents/"):
             return {"id": "11111111-1111-1111-1111-111111111111", "qpid": "qpid_AB8E4825B4D6D709F172232E", "assurance": "qpid1"}
         if method == "POST" and path.endswith("/kya"):
-            raise qid.QuantPayIdentityError("AgentVerified ID returned HTTP 400: verified KYC or KYB session is required")
+            raise qid.AgentVerifiedIdentityError("AgentVerified ID returned HTTP 400: verified KYC or KYB session is required")
         if method == "POST" and path.endswith("/kya/stripe"):
             return {
                 "verificationSessionId": "33333333-3333-3333-3333-333333333333",
@@ -313,10 +287,49 @@ def test_continue_recovers_missing_stripe_verification_url(qpid_home, monkeypatc
             }
         raise AssertionError(f"unexpected request: {method} {path}")
 
-    monkeypatch.setattr(qid.QuantPayClient, "request", request)
+    monkeypatch.setattr(qid.AgentVerifiedClient, "request", request)
     result = qid.run_id_command("continue")
     assert "Stripe KYA is ready to continue" in result
     assert "https://verify.stripe.com/resume-test" in result
     state = qid.load_state()
     assert state["verification_session_id"] == "33333333-3333-3333-3333-333333333333"
     assert state["verification_url"] == "https://verify.stripe.com/resume-test"
+
+
+def test_legacy_identity_directory_is_migrated_to_agentverified(qpid_home):
+    legacy = qpid_home / "identity" / "agentverified"
+    legacy.mkdir(parents=True)
+    (legacy / "state.json").write_text('{"qpid":"qpid_legacy"}')
+    assert qid.identity_dir() == qpid_home / "identity" / "agentverified"
+    assert not legacy.exists()
+    assert qid.state_path().exists()
+
+
+def test_id_help_is_identity_only(qpid_home):
+    help_text = qid.run_id_command("help")
+    assert "AgentVerified ID" in help_text
+    assert "ERC-8004" not in help_text
+    assert "x402" not in help_text
+    assert "/id bind" not in help_text
+    assert "/id test" not in help_text
+
+
+def test_invalid_management_token_is_discarded_without_losing_local_identity(qpid_home, monkeypatch):
+    qid.save_state({
+        "agent_id": "11111111-1111-1111-1111-111111111111",
+        "qpid": "qpid_AB8E4825B4D6D709F172232E",
+        "assurance": "qpid2",
+    })
+    qid.ensure_holder_key()
+    qid._atomic_private_json(qid.credential_path(), {"credential": {"id": "vc1"}})
+    qid._atomic_private_json(qid.management_token_path(), {"access_token": "qpe_stale"})
+
+    def fake_request(*args, **kwargs):
+        return qid.httpx.Response(422, json={"message": "Invalid agent enrollment token"})
+
+    monkeypatch.setattr(qid.httpx, "request", fake_request)
+    result = qid.run_id_command("status")
+    assert "AgentVerified ID" in result
+    assert "Local AgentVerified identity remains intact" in result
+    assert not qid.management_token_path().exists()
+    assert qid.credential_path().exists()

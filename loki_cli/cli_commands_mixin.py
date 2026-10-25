@@ -2326,7 +2326,7 @@ class CLICommandsMixin:
 
     def _handle_id_command(self, cmd_original: str) -> None:
         """Manage Loki's AgentVerified ID lifecycle."""
-        from loki_cli.quantpay_identity import run_id_command
+        from loki_cli.agentverified_identity import run_id_command
         _say_block(*run_id_command(_command_arg(cmd_original)).splitlines())
 
     def _handle_link_command(self, cmd_original: str) -> None:
