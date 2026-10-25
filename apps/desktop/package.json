@@ -2,7 +2,7 @@
   "name": "loki",
   "productName": "Loki Agent",
   "private": true,
-  "version": "0.21.31",
+  "version": "0.21.32",
   "description": "Native desktop shell for Loki Agent.",
   "author": "WunderCorp, Inc.",
   "repository": {

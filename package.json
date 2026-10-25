@@ -1,6 +1,6 @@
 {
   "name": "@wundercorp/loki",
-  "version": "0.21.31",
+  "version": "0.21.32",
   "description": "Loki Agent — a self-improving AI agent by WunderCorp, Inc.",
   "private": false,
   "workspaces": [
