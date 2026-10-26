@@ -8,7 +8,7 @@ The original `/id start` required a pre-existing human `QUANTPAY_ACCESS_TOKEN`, 
 
 - `/id start [name]` creates a short-lived QuantPay device enrollment using only Loki's public holder JWK.
 - The private P-256 JWK stays under the active Loki home at mode 0600.
-- Default approval surface is Wallet; `/id start --console [name]` uses Console.
+- Default and supported approval surface is Console; `/id start` and `/id reconnect` use Console.
 - The human must explicitly approve the agent after sign-in; browser sign-in no longer silently attaches an agent.
 - `/id continue` exchanges the approved device code for a one-time-issued `qpe_...` bearer token server-bound to the single enrolled QPID, and the exchange itself requires a fresh holder JWT signed by Loki's local key and bound to the device-code digest.
 - The human Cognito access token is never copied into Loki.
@@ -43,7 +43,7 @@ Mandate request audit data retains the enrollment-session ID that initiated the 
 
 ## Product surfaces
 
-- Wallet is the canonical individual-controller approval/KYC surface for QPID2.
+- Console is the canonical approval surface for AgentVerified enrollment and reconnect.
 - Console is the business/admin surface. It prefers a current verified business/KYB session and can therefore approve at QPID3; if no eligible business verification exists, it falls back to controller KYC/QPID2. Console enrollment approval requires owner/admin/finance/manager, while Wallet individual approval may be completed by the member/controller. Console Agent Harness now exposes the QPID list and KYA controls directly.
 - Both surfaces explicitly show pairing/request codes and the authority being requested before approval.
 - Both surfaces reuse current verification evidence when eligible instead of forcing Stripe Identity again for every agent.

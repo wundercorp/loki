@@ -386,6 +386,8 @@ def _decode_response(response: httpx.Response, label: str) -> dict[str, Any]:
         detail = ""
         if isinstance(payload, dict):
             detail = str(payload.get("error_description") or payload.get("message") or payload.get("error") or "")
+        elif isinstance(payload, list):
+            detail = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
         suffix = f": {detail}" if detail else ""
         raise AgentVerifiedIdentityError(f"{label} returned HTTP {response.status_code}{suffix}")
     return payload if isinstance(payload, dict) else {"data": payload}
@@ -530,7 +532,7 @@ def _store_enrollment_result(
     save_state(state)
 
 
-def _start(client: AgentVerifiedClient, name: str, surface: str = "wallet") -> str:
+def _start(client: AgentVerifiedClient, name: str, surface: str = "console") -> str:
     state = load_state()
     if state.get("agent_id"):
         return (
@@ -561,10 +563,10 @@ def _start(client: AgentVerifiedClient, name: str, surface: str = "wallet") -> s
             _clear_pending_enrollment(state)
         result = client.public_request("POST", "/agent-enrollments", json_body={
             "name": name or "Loki Agent",
-            "surface": "console" if surface == "console" else "wallet",
+            "surface": "console",
             "publicKeyJwk": public,
         })
-        _store_enrollment_result(state, result, surface=surface, mode="enroll")
+        _store_enrollment_result(state, result, surface="console", mode="enroll")
 
     preferred = state.get("enrollment_url") or state.get("enrollment_personal_url") or state.get("enrollment_wallet_url") or state.get("enrollment_console_url")
     return (
@@ -579,7 +581,7 @@ def _start(client: AgentVerifiedClient, name: str, surface: str = "wallet") -> s
     )
 
 
-def _reconnect(client: AgentVerifiedClient, surface: str = "wallet") -> str:
+def _reconnect(client: AgentVerifiedClient, surface: str = "console") -> str:
     state = load_state()
     agent_id = str(state.get("agent_id") or "")
     avid = str(state.get("avid") or "")
@@ -630,17 +632,31 @@ def _reconnect(client: AgentVerifiedClient, surface: str = "wallet") -> str:
     if not enrollment or enrollment_expires_at <= time.time():
         if enrollment_expires_at <= time.time():
             _clear_pending_enrollment(state)
-        result = client.public_request("POST", "/agent-enrollments", json_body={
-            "mode": "reconnect",
-            "name": "Loki Agent",
-            "surface": "console" if surface == "console" else "wallet",
-            "agentId": agent_id,
-            "avid": avid,
-            "publicKeyJwk": public,
-        })
+        try:
+            result = client.public_request("POST", "/agent-enrollments", json_body={
+                "mode": "reconnect",
+                "name": "Loki Agent",
+                "surface": "console",
+                "agentId": agent_id,
+                "avid": avid,
+                "publicKeyJwk": public,
+            })
+        except AgentVerifiedIdentityError as exc:
+            message = str(exc)
+            if "HTTP 422" in message and (
+                "unrecognized_keys" in message
+                or "Invalid literal value" in message
+                or "expected" in message and "console" in message
+            ):
+                raise AgentVerifiedIdentityError(
+                    "AgentVerified API deployment is older than this Loki build and does not support the current "
+                    "secure reconnect contract. Deploy the current AgentVerified API, then rerun /id reconnect. "
+                    "The local Agent ID, credential, and holder key were not changed."
+                ) from exc
+            raise
         state["reconnect_expected_agent_id"] = agent_id
         state["reconnect_expected_avid"] = avid
-        _store_enrollment_result(state, result, surface=surface, mode="reconnect")
+        _store_enrollment_result(state, result, surface="console", mode="reconnect")
 
     preferred = state.get("enrollment_url") or state.get("enrollment_personal_url") or state.get("enrollment_wallet_url") or state.get("enrollment_console_url")
     return (
@@ -866,10 +882,8 @@ def _doctor(client: AgentVerifiedClient) -> str:
 
 _HELP = """AgentVerified ID for Loki
 /id status                 Show local + live AgentVerified identity state
-/id start [name]           First-time browser enrollment only
-/id start --console [name] Use the business/admin approval surface for first enrollment
-/id reconnect              Reconnect Loki to the existing AgentVerified ID
-/id reconnect --console    Use the business/admin approval surface for reconnect
+/id start [name]           First-time browser enrollment through AgentVerified Console
+/id reconnect              Reconnect Loki to the existing AgentVerified ID through AgentVerified Console
 /id continue               Finish the pending enrollment or reconnect authorization
 /id doctor                 Check public AgentVerified issuer/discovery endpoints
 /id open                   Reprint the pending AgentVerified approval URL
@@ -893,12 +907,18 @@ def run_id_command(raw_args: str = "") -> str:
         if action in {"status", "show"}:
             return _format_status(client, load_state())
         if action in {"start", "setup", "init"}:
-            surface = "console" if any(item in {"--business", "--console"} for item in parts[1:]) else "wallet"
-            name_parts = [item for item in parts[1:] if item not in {"--business", "--console", "--personal", "--wallet"}]
-            return _start(client, " ".join(name_parts).strip() or "Loki Agent", surface)
+            if any(item in {"--personal", "--wallet"} for item in parts[1:]):
+                raise AgentVerifiedIdentityError(
+                    "Wallet enrollment is no longer accepted by the AgentVerified API. Use /id start or /id start --console."
+                )
+            name_parts = [item for item in parts[1:] if item not in {"--business", "--console"}]
+            return _start(client, " ".join(name_parts).strip() or "Loki Agent", "console")
         if action == "reconnect":
-            surface = "console" if any(item in {"--business", "--console"} for item in parts[1:]) else "wallet"
-            return _reconnect(client, surface)
+            if any(item in {"--personal", "--wallet"} for item in parts[1:]):
+                raise AgentVerifiedIdentityError(
+                    "Wallet reconnect is no longer accepted by the AgentVerified API. Use /id reconnect."
+                )
+            return _reconnect(client, "console")
         if action in {"continue", "resume", "credential"}:
             return _continue(client)
         if action == "doctor":

@@ -39,7 +39,7 @@ def test_holder_key_is_private_and_public_projection_has_no_private_material(avi
     assert qid.key_path().stat().st_mode & 0o777 == 0o600
 
 
-def test_start_uses_public_device_enrollment_without_human_bearer_token(avid_home, monkeypatch):
+def test_start_uses_console_device_enrollment_without_human_bearer_token(avid_home, monkeypatch):
     captured = {}
 
     def public_request(self, method, path, *, json_body=None):
@@ -64,7 +64,7 @@ def test_start_uses_public_device_enrollment_without_human_bearer_token(avid_hom
     assert "agentverified.sh" in result
     assert "No human bearer token needs to be copied into Loki" in result
     assert captured["name"] == "Loki Production Agent"
-    assert captured["surface"] == "wallet"
+    assert captured["surface"] == "console"
     assert "d" not in captured["publicKeyJwk"]
     assert captured["publicKeyJwk"]["kid"]
     assert qid.state_path().exists()
@@ -363,6 +363,15 @@ def test_start_existing_identity_points_to_reconnect_without_creating_enrollment
     assert "avid_AB8E4825B4D6D709F172232E" in result
 
 
+def test_wallet_surface_is_rejected_before_network_request(avid_home, monkeypatch):
+    def public_request(*args, **kwargs):
+        raise AssertionError("wallet compatibility must fail before a network request")
+
+    monkeypatch.setattr(qid.AgentVerifiedClient, "public_request", public_request)
+    result = qid.run_id_command("start --wallet Loki Production Agent")
+    assert "Wallet enrollment is no longer accepted" in result
+
+
 def test_reconnect_requires_existing_identity(avid_home):
     result = qid.run_id_command("reconnect")
     assert "No existing AgentVerified ID to reconnect" in result
@@ -400,6 +409,24 @@ def test_reconnect_reuses_existing_holder_key_and_identity(avid_home, monkeypatc
     state = qid.load_state()
     assert state["enrollment_mode"] == "reconnect"
     assert state["reconnect_expected_avid"] == "avid_AB8E4825B4D6D709F172232E"
+
+
+def test_reconnect_reports_api_version_skew_without_mutating_identity(avid_home, monkeypatch):
+    _seed_existing_identity(avid_home)
+    key_before = qid.key_path().read_bytes()
+    credential_before = qid.credential_path().read_bytes()
+
+    def public_request(self, method, path, *, json_body=None):
+        raise qid.AgentVerifiedIdentityError(
+            'AgentVerified enrollment returned HTTP 422: [{"code":"unrecognized_keys","keys":["mode","agentId","avid"]}]'
+        )
+
+    monkeypatch.setattr(qid.AgentVerifiedClient, "public_request", public_request)
+    result = qid.run_id_command("reconnect")
+    assert "older than this Loki build" in result
+    assert "Deploy the current AgentVerified API" in result
+    assert qid.key_path().read_bytes() == key_before
+    assert qid.credential_path().read_bytes() == credential_before
 
 
 def test_reconnect_continue_preserves_identity_key_and_credential(avid_home, monkeypatch):
