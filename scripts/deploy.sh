@@ -695,11 +695,53 @@ PYDATE
       push_release_source
     fi
 
-    if npm view "$PACKAGE_NAME@$TARGET_VERSION" version --registry=https://registry.npmjs.org --prefer-online --fetch-retries=0 >/dev/null 2>&1; then
-      printf '%s@%s appeared on npm before publish. Refusing to skip or overwrite it; rerun deploy to select the next version.\n' \
-        "$PACKAGE_NAME" "$TARGET_VERSION" >&2
-      exit 1
-    fi
+    COLLISION_RETRIES=0
+    while npm view "$PACKAGE_NAME@$TARGET_VERSION" version --registry=https://registry.npmjs.org --prefer-online --fetch-retries=0 >/dev/null 2>&1; do
+      if ! $AUTO_VERSION || [ -n "$EXPLICIT_VERSION" ]; then
+        printf '%s@%s appeared on npm before publish and cannot be auto-bumped.\n' \
+          "$PACKAGE_NAME" "$TARGET_VERSION" >&2
+        exit 1
+      fi
+
+      COLLISION_RETRIES=$((COLLISION_RETRIES + 1))
+      if [ "$COLLISION_RETRIES" -gt 10 ]; then
+        printf '%s\n' 'Too many npm version collisions; refusing to loop indefinitely.' >&2
+        exit 1
+      fi
+
+      REGISTRY_VERSION="$(npm view "$PACKAGE_NAME" version --registry=https://registry.npmjs.org --prefer-online --fetch-retries=0 2>/dev/null || true)"
+      NEXT_VERSION="$(python3 scripts/sync_version.py next --local "$TARGET_VERSION" --registry "$REGISTRY_VERSION" --bump "$VERSION_BUMP")"
+      if [ "$NEXT_VERSION" = "$TARGET_VERSION" ]; then
+        NEXT_VERSION="$(python3 scripts/sync_version.py next --local "$TARGET_VERSION" --registry "$TARGET_VERSION" --bump "$VERSION_BUMP")"
+      fi
+
+      printf '%s@%s appeared on npm before publish; advancing release to %s and retrying.\n' \
+        "$PACKAGE_NAME" "$TARGET_VERSION" "$NEXT_VERSION"
+      TARGET_VERSION="$NEXT_VERSION"
+      RELEASE_DATE="$(python3 - <<'PYDATE2'
+from datetime import date
+value = date.today()
+print(f"{value.year}.{value.month}.{value.day}")
+PYDATE2
+)"
+      python3 scripts/sync_version.py set "$TARGET_VERSION" --date "$RELEASE_DATE"
+      VERSION_CHANGED=true
+      npm run release:check
+
+      if $VERSION_GIT_ACTIVE; then
+        VERSION_GIT_FILES=()
+        for version_file in "${VERSION_FILES[@]}"; do
+          if [ -e "$version_file" ]; then
+            VERSION_GIT_FILES+=("$version_file")
+          fi
+        done
+        git add -- "${VERSION_GIT_FILES[@]}"
+        if ! git diff --cached --quiet; then
+          git commit -m "chore: bump version to v$TARGET_VERSION"
+        fi
+        push_release_source
+      fi
+    done
 
     npm publish --access public --provenance=false --registry=https://registry.npmjs.org
 

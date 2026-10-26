@@ -46,6 +46,22 @@ def _utc_now() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _canonical_avid(value: Any) -> str:
+    text = str(value or "").strip()
+    if text.startswith("qpid_"):
+        return "avid_" + text[5:]
+    return text
+
+
+def _display_assurance(value: Any) -> str:
+    text = str(value or "").strip()
+    if text.startswith("qpid") and text[4:].isdigit():
+        return f"Level {text[4:]}"
+    if text.startswith("avid") and text[4:].isdigit():
+        return f"Level {text[4:]}"
+    return text or "unknown"
+
+
 def _private_fields(jwk: dict[str, Any]) -> set[str]:
     return {key for key in ("d", "p", "q", "dp", "dq", "qi", "oth", "k") if key in jwk}
 
@@ -96,14 +112,14 @@ def _sign_enrollment_token_proof(private_jwk: dict[str, Any], device_code: str) 
     return jwt.encode(
         {
             "device_code_hash": device_hash,
-            "aud": "quantpay-agent-enrollment-token",
+            "aud": "agentverified-agent-enrollment-token",
             "iat": now,
             "exp": now + 300,
             "jti": str(uuid.uuid4()),
         },
         _ec_private_key(private_jwk),
         algorithm="ES256",
-        headers={"alg": "ES256", "kid": private_jwk.get("kid"), "typ": "quantpay-agent-enrollment+jwt"},
+        headers={"alg": "ES256", "kid": private_jwk.get("kid"), "typ": "agentverified-agent-enrollment+jwt"},
     )
 
 
@@ -207,7 +223,17 @@ def _load_management_token() -> dict[str, Any]:
 
 
 def load_state() -> dict[str, Any]:
-    return _load_json(state_path())
+    state = _load_json(state_path())
+    legacy = state.pop("qpid", None)
+    if not state.get("avid") and legacy:
+        state["avid"] = _canonical_avid(legacy)
+        save_state(state)
+    elif state.get("avid"):
+        canonical = _canonical_avid(state.get("avid"))
+        if canonical != state.get("avid"):
+            state["avid"] = canonical
+            save_state(state)
+    return state
 
 
 def save_state(state: dict[str, Any]) -> None:
@@ -224,6 +250,18 @@ def ensure_holder_key() -> tuple[dict[str, Any], dict[str, Any]]:
     public, private = generate_es256_jwk()
     _atomic_private_json(key_path(), private)
     return public, private
+
+
+def _existing_holder_key() -> tuple[dict[str, Any], dict[str, Any]]:
+    """Load the existing holder key without ever generating a replacement."""
+    existing = _load_json(key_path())
+    if not existing:
+        raise AgentVerifiedIdentityError(
+            "Existing AgentVerified holder key is missing. Refusing to reconnect with a new key."
+        )
+    if _private_fields(existing) != {"d"}:
+        raise AgentVerifiedIdentityError("Stored AgentVerified holder JWK is malformed")
+    return public_jwk(existing), existing
 
 
 @dataclass
@@ -355,7 +393,7 @@ def _decode_response(response: httpx.Response, label: str) -> dict[str, Any]:
 
 def _assurance_rank(value: str) -> int:
     try:
-        return int(str(value).lower().removeprefix("qpid"))
+        return int(str(value).lower().removeprefix("qpid").removeprefix("avid"))
     except ValueError:
         return 0
 
@@ -365,7 +403,7 @@ def _get_agent(client: AgentVerifiedClient, state: dict[str, Any]) -> dict[str, 
     if not agent_id:
         raise AgentVerifiedIdentityError("No local AgentVerified identity exists yet. Run /id start.")
     agent = client.request("GET", f"/agents/{agent_id}")
-    state["qpid"] = agent.get("qpid", state.get("qpid"))
+    state["avid"] = _canonical_avid(agent.get("avid") or agent.get("qpid") or state.get("avid"))
     state["assurance"] = agent.get("assurance", state.get("assurance", "qpid1"))
     save_state(state)
     return agent
@@ -382,16 +420,21 @@ def _format_status(client: AgentVerifiedClient, state: dict[str, Any]) -> str:
                 except AgentVerifiedIdentityError:
                     remote_status = "pending"
             if remote_status in {"expired", "canceled"}:
+                mode = str(state.get("enrollment_mode") or "enroll")
                 _clear_pending_enrollment(state)
                 save_state(state)
-                return f"AgentVerified ID: enrollment {remote_status}. Run /id start to create a fresh pairing."
+                command = "/id reconnect" if mode == "reconnect" else "/id start"
+                return f"AgentVerified ID: authorization {remote_status}. Run {command} to create a fresh pairing."
             next_step = (
-                "Approval received. Run /id continue to claim the scoped agent token."
+                "Approval received. Run /id continue to finish reconnecting."
+                if state.get("enrollment_mode") == "reconnect" and remote_status == "approved"
+                else "Approval received. Run /id continue to claim the scoped agent token."
                 if remote_status == "approved"
-                else "After approval / identity verification, run /id continue."
+                else "After approval, run /id continue."
             )
+            flow = "reconnect" if state.get("enrollment_mode") == "reconnect" else "enrollment"
             return (
-                f"AgentVerified ID: enrollment {remote_status}\n"
+                f"AgentVerified ID: {flow} {remote_status}\n"
                 f"Pairing code: {state.get('enrollment_user_code', 'unknown')}\n"
                 f"Approve: {state.get('enrollment_url', 'approval link unavailable')}\n"
                 f"{next_step}\n"
@@ -409,7 +452,10 @@ def _format_status(client: AgentVerifiedClient, state: dict[str, Any]) -> str:
     if client.authenticated:
         try:
             agent = client.request("GET", f"/agents/{state['agent_id']}")
-            state["qpid"] = agent.get("qpid", state.get("qpid"))
+            remote_avid = _canonical_avid(agent.get("avid") or agent.get("qpid"))
+            if remote_avid and state.get("avid") and remote_avid != str(state["avid"]):
+                raise AgentVerifiedIdentityError("Remote Agent ID does not match the locally stored identity")
+            state["avid"] = _canonical_avid(agent.get("avid") or agent.get("qpid") or state.get("avid"))
             state["assurance"] = agent.get("assurance", state.get("assurance"))
             credentials = client.request("GET", f"/agents/{state['agent_id']}/credentials").get("items", [])
             save_state(state)
@@ -420,18 +466,25 @@ def _format_status(client: AgentVerifiedClient, state: dict[str, Any]) -> str:
                     management_token_path().unlink()
                 except FileNotFoundError:
                     pass
-                remote_note = "\nRemote management session expired. Local AgentVerified identity remains intact."
+                client.access_token = ""
+                remote_note = (
+                    "\nManagement connection: inactive\n"
+                    "Run /id reconnect to reconnect Loki to this AgentVerified ID."
+                )
             else:
                 remote_note = f"\nRemote status unavailable: {exc}"
     else:
-        remote_note = "\nRemote status skipped: AgentVerified management authorization is not active in this process."
+        remote_note = (
+            "\nManagement connection: inactive\n"
+            "Run /id reconnect to reconnect Loki to this AgentVerified ID."
+        )
 
     assurance = str(agent.get("assurance") or state.get("assurance") or "qpid1")
     credential_saved = credential_path().exists()
     lines = [
         "AgentVerified ID",
-        f"Agent ID: {state.get('qpid', 'unknown')}",
-        f"Assurance: {assurance}",
+        f"Agent ID: {state.get('avid', 'unknown')}",
+        f"Assurance: {_display_assurance(assurance)}",
         f"Holder key: {key_path()} (private, local only)",
         f"Verification session: {state.get('verification_session_id', 'not started')}",
         f"Active credentials: {sum(1 for item in credentials if item.get('status') == 'active') if credentials is not None else 'unavailable'}",
@@ -445,24 +498,55 @@ def _format_status(client: AgentVerifiedClient, state: dict[str, Any]) -> str:
         lines += ["", "Identity ready."]
     return "\n".join(lines) + remote_note
 
-
 def _clear_pending_enrollment(state: dict[str, Any]) -> None:
     for key in (
         "enrollment_device_code", "enrollment_user_code", "enrollment_surface",
         "enrollment_url", "enrollment_personal_url", "enrollment_wallet_url", "enrollment_console_url",
-        "enrollment_expires_at_epoch",
+        "enrollment_expires_at_epoch", "enrollment_mode", "reconnect_expected_agent_id",
+        "reconnect_expected_avid",
     ):
         state.pop(key, None)
 
 
+def _store_enrollment_result(
+    state: dict[str, Any], result: dict[str, Any], *, surface: str, mode: str
+) -> None:
+    expires_in = int(result.get("expiresIn") or 900)
+    state.update({
+        "version": max(int(state.get("version") or 0), 3),
+        "enrollment_device_code": result.get("deviceCode"),
+        "enrollment_user_code": result.get("userCode"),
+        "enrollment_surface": surface,
+        "enrollment_mode": mode,
+        "enrollment_url": result.get("verificationUriComplete"),
+        "enrollment_personal_url": result.get("walletVerificationUriComplete") or result.get("verificationUriComplete"),
+        "enrollment_wallet_url": result.get("walletVerificationUriComplete"),
+        "enrollment_console_url": result.get("consoleVerificationUriComplete"),
+        "enrollment_expires_at_epoch": time.time() + expires_in,
+        "created_at": state.get("created_at") or _utc_now(),
+    })
+    if not state.get("enrollment_device_code") or not state.get("enrollment_user_code"):
+        raise AgentVerifiedIdentityError("AgentVerified authorization did not return a device/user code")
+    save_state(state)
+
+
 def _start(client: AgentVerifiedClient, name: str, surface: str = "wallet") -> str:
     state = load_state()
-    public, _private = ensure_holder_key()
     if state.get("agent_id"):
-        return _format_status(client, state)
+        return (
+            "AgentVerified ID already exists.\n"
+            f"Agent ID: {state.get('avid', 'unknown')}\n"
+            "Run /id reconnect to restore management access, or /id status to inspect the identity."
+        )
 
+    public, _private = ensure_holder_key()
     enrollment = state.get("enrollment_device_code")
     enrollment_expires_at = float(state.get("enrollment_expires_at_epoch") or 0)
+    if enrollment and state.get("enrollment_mode") not in {None, "enroll"}:
+        _clear_pending_enrollment(state)
+        save_state(state)
+        enrollment = None
+        enrollment_expires_at = 0
     if enrollment and enrollment_expires_at > time.time() and state.get("enrollment_user_code"):
         try:
             remote = client.public_request("GET", f"/agent-enrollments/{state['enrollment_user_code']}")
@@ -471,7 +555,6 @@ def _start(client: AgentVerifiedClient, name: str, surface: str = "wallet") -> s
                 save_state(state)
                 enrollment = None
         except AgentVerifiedIdentityError:
-            # If the status endpoint is temporarily unreachable, preserve the still-live local pairing.
             pass
     if not enrollment or enrollment_expires_at <= time.time():
         if enrollment_expires_at <= time.time():
@@ -481,22 +564,7 @@ def _start(client: AgentVerifiedClient, name: str, surface: str = "wallet") -> s
             "surface": "console" if surface == "console" else "wallet",
             "publicKeyJwk": public,
         })
-        expires_in = int(result.get("expiresIn") or 900)
-        state.update({
-            "version": 2,
-            "enrollment_device_code": result.get("deviceCode"),
-            "enrollment_user_code": result.get("userCode"),
-            "enrollment_surface": surface,
-            "enrollment_url": result.get("verificationUriComplete"),
-            "enrollment_personal_url": result.get("walletVerificationUriComplete") or result.get("verificationUriComplete"),
-            "enrollment_wallet_url": result.get("walletVerificationUriComplete"),
-            "enrollment_console_url": result.get("consoleVerificationUriComplete"),
-            "enrollment_expires_at_epoch": time.time() + expires_in,
-            "created_at": state.get("created_at") or _utc_now(),
-        })
-        if not state.get("enrollment_device_code") or not state.get("enrollment_user_code"):
-            raise AgentVerifiedIdentityError("AgentVerified enrollment did not return a device/user code")
-        save_state(state)
+        _store_enrollment_result(state, result, surface=surface, mode="enroll")
 
     preferred = state.get("enrollment_url") or state.get("enrollment_personal_url") or state.get("enrollment_wallet_url") or state.get("enrollment_console_url")
     return (
@@ -506,18 +574,93 @@ def _start(client: AgentVerifiedClient, name: str, surface: str = "wallet") -> s
         f"Personal approval: {state.get('enrollment_personal_url') or state.get('enrollment_wallet_url', 'unavailable')}\n"
         f"Business approval: {state.get('enrollment_console_url', 'unavailable')}\n\n"
         f"Holder key: {key_path()} (mode 0600; never uploaded)\n"
-        "Sign in and approve in AgentVerified. If identity verification is needed, the web flow opens Stripe. "
-        "Then run /id continue. No Cognito bearer token needs to be copied into Loki."
+        "Sign in and approve in AgentVerified. If identity verification is needed, the web flow opens it. "
+        "Then run /id continue. No human bearer token needs to be copied into Loki."
     )
 
 
-def _exchange_enrollment(client: AgentVerifiedClient, state: dict[str, Any]) -> bool:
-    if client.authenticated and state.get("agent_id"):
-        return True
+def _reconnect(client: AgentVerifiedClient, surface: str = "wallet") -> str:
+    state = load_state()
+    agent_id = str(state.get("agent_id") or "")
+    avid = str(state.get("avid") or "")
+    if not agent_id or not avid:
+        raise AgentVerifiedIdentityError("No existing AgentVerified ID to reconnect. Run /id start first.")
+
+    public, _private = _existing_holder_key()
+
+    # A valid management token means there is nothing to reconnect. A stale token
+    # is discarded before the public reconnect ceremony begins.
+    if client.authenticated:
+        try:
+            remote = client.request("GET", f"/agents/{agent_id}")
+            remote_avid = _canonical_avid(remote.get("avid") or remote.get("qpid"))
+            if remote_avid and remote_avid != avid:
+                raise AgentVerifiedIdentityError("Remote Agent ID does not match the locally stored identity")
+            return (
+                "AgentVerified management connection is already active.\n"
+                f"Agent ID: {avid}\nIdentity ready."
+            )
+        except AgentVerifiedIdentityError as exc:
+            message = str(exc)
+            if "Invalid agent enrollment token" not in message and "management session expired" not in message.lower():
+                raise
+            try:
+                management_token_path().unlink()
+            except FileNotFoundError:
+                pass
+            client.access_token = ""
+
+    enrollment = state.get("enrollment_device_code")
+    enrollment_expires_at = float(state.get("enrollment_expires_at_epoch") or 0)
+    if enrollment and state.get("enrollment_mode") != "reconnect":
+        _clear_pending_enrollment(state)
+        save_state(state)
+        enrollment = None
+        enrollment_expires_at = 0
+    if enrollment and enrollment_expires_at > time.time() and state.get("enrollment_user_code"):
+        try:
+            remote = client.public_request("GET", f"/agent-enrollments/{state['enrollment_user_code']}")
+            if str(remote.get("status") or "") in {"expired", "canceled"}:
+                _clear_pending_enrollment(state)
+                save_state(state)
+                enrollment = None
+        except AgentVerifiedIdentityError:
+            pass
+
+    if not enrollment or enrollment_expires_at <= time.time():
+        if enrollment_expires_at <= time.time():
+            _clear_pending_enrollment(state)
+        result = client.public_request("POST", "/agent-enrollments", json_body={
+            "mode": "reconnect",
+            "name": "Loki Agent",
+            "surface": "console" if surface == "console" else "wallet",
+            "agentId": agent_id,
+            "avid": avid,
+            "publicKeyJwk": public,
+        })
+        state["reconnect_expected_agent_id"] = agent_id
+        state["reconnect_expected_avid"] = avid
+        _store_enrollment_result(state, result, surface=surface, mode="reconnect")
+
+    preferred = state.get("enrollment_url") or state.get("enrollment_personal_url") or state.get("enrollment_wallet_url") or state.get("enrollment_console_url")
+    return (
+        "AgentVerified reconnect started.\n"
+        f"Agent ID: {avid}\n"
+        f"Pairing code: {state.get('enrollment_user_code')}\n"
+        f"Approve reconnect: {preferred}\n\n"
+        f"Holder key: {key_path()} (existing key; never replaced or uploaded)\n"
+        "Approve the connection in AgentVerified, then run /id continue. "
+        "This reconnect does not create a new Agent ID or repeat identity verification."
+    )
+
+def _exchange_enrollment(client: AgentVerifiedClient, state: dict[str, Any]) -> str | None:
+    mode = str(state.get("enrollment_mode") or "enroll")
+    if client.authenticated and state.get("agent_id") and mode != "reconnect":
+        return "active"
     device_code = str(state.get("enrollment_device_code") or "")
     if not device_code:
-        return False
-    _public, private = ensure_holder_key()
+        return None
+    _public, private = _existing_holder_key() if mode == "reconnect" else ensure_holder_key()
     holder_proof = _sign_enrollment_token_proof(private, device_code)
     result = client.public_request(
         "POST", "/agent-enrollments/token",
@@ -525,36 +668,59 @@ def _exchange_enrollment(client: AgentVerifiedClient, state: dict[str, Any]) -> 
     )
     status = str(result.get("status") or "")
     if status == "authorization_pending":
+        verb = "reconnect" if mode == "reconnect" else "enrollment"
         raise AgentVerifiedIdentityError(
-            f"Agent enrollment is waiting for human approval. Open {state.get('enrollment_url', 'the AgentVerified approval link')} "
+            f"Agent {verb} is waiting for human approval. Open {state.get('enrollment_url', 'the AgentVerified approval link')} "
             "and then run /id continue again."
         )
     if status in {"expired", "canceled"}:
         _clear_pending_enrollment(state)
         save_state(state)
-        raise AgentVerifiedIdentityError(f"Agent enrollment is {status}. Run /id start again.")
+        command = "/id reconnect" if mode == "reconnect" else "/id start"
+        raise AgentVerifiedIdentityError(f"Agent authorization is {status}. Run {command} again.")
     token = str(result.get("accessToken") or "")
     if status != "approved" or not token:
-        raise AgentVerifiedIdentityError("AgentVerified enrollment approval did not return a scoped agent token")
+        raise AgentVerifiedIdentityError("AgentVerified approval did not return a scoped agent token")
+
+    if mode == "reconnect":
+        expected_agent_id = str(state.get("reconnect_expected_agent_id") or state.get("agent_id") or "")
+        expected_avid = str(state.get("reconnect_expected_avid") or state.get("avid") or "")
+        returned_agent_id = str(result.get("agentId") or "")
+        returned_avid = _canonical_avid(result.get("avid") or result.get("qpid"))
+        if not returned_agent_id or not returned_avid:
+            raise AgentVerifiedIdentityError("Reconnect response did not identify the existing AgentVerified ID")
+        if returned_agent_id != expected_agent_id or returned_avid != expected_avid:
+            _clear_pending_enrollment(state)
+            save_state(state)
+            raise AgentVerifiedIdentityError(
+                "Reconnect identity mismatch. Refusing to replace the locally stored AgentVerified ID."
+            )
+
     _atomic_private_json(management_token_path(), {
         "access_token": token,
         "token_type": result.get("tokenType", "Bearer"),
         "expires_in": result.get("expiresIn"),
         "received_at": _utc_now(),
     })
-    state.pop("enrollment_device_code", None)
-    state.pop("enrollment_expires_at_epoch", None)
+
+    if mode == "reconnect":
+        state["management_reconnected_at"] = _utc_now()
+        _clear_pending_enrollment(state)
+        save_state(state)
+        client.access_token = token
+        return "reconnect"
+
+    _clear_pending_enrollment(state)
     state.update({
         "agent_id": result.get("agentId"),
-        "qpid": result.get("qpid"),
+        "avid": _canonical_avid(result.get("avid") or result.get("qpid")),
         "assurance": result.get("assurance", "qpid1"),
         "verification_session_id": result.get("verificationSessionId"),
         "enrollment_approved_at": _utc_now(),
     })
     save_state(state)
     client.access_token = token
-    return True
-
+    return "enroll"
 
 def _active_credential(client: AgentVerifiedClient, agent_id: str) -> dict[str, Any] | None:
     items = client.request("GET", f"/agents/{agent_id}/credentials").get("items", [])
@@ -563,12 +729,29 @@ def _active_credential(client: AgentVerifiedClient, agent_id: str) -> dict[str, 
 
 def _continue(client: AgentVerifiedClient) -> str:
     state = load_state()
-    _public, private = ensure_holder_key()
-    if not state.get("agent_id") or not client.authenticated:
-        if not _exchange_enrollment(client, state):
-            raise AgentVerifiedIdentityError("No pending AgentVerified enrollment. Run /id start first.")
+    pending_mode = str(state.get("enrollment_mode") or "")
+    if pending_mode == "reconnect":
+        _public, private = _existing_holder_key()
+    else:
+        _public, private = ensure_holder_key()
+    exchange_result: str | None = None
+    if not state.get("agent_id") or not client.authenticated or pending_mode == "reconnect":
+        exchange_result = _exchange_enrollment(client, state)
+        if not exchange_result:
+            command = "/id reconnect" if state.get("agent_id") else "/id start"
+            raise AgentVerifiedIdentityError(f"No pending AgentVerified authorization. Run {command} first.")
     client.require_management_auth()
     agent = _get_agent(client, state)
+    if exchange_result == "reconnect":
+        returned_avid = _canonical_avid(agent.get("avid") or agent.get("qpid") or state.get("avid"))
+        if returned_avid != str(state.get("avid") or ""):
+            raise AgentVerifiedIdentityError("Reconnect verification returned a different AgentVerified ID")
+        return (
+            "AgentVerified management connection restored.\n"
+            f"Agent ID: {state.get('avid')}\n"
+            "Existing identity, holder key, assurance, and credential were not changed.\n"
+            "Identity ready."
+        )
     credential = _active_credential(client, str(state["agent_id"]))
     # Credential issuance is a separate authoritative step from Stripe/webhook reconciliation.
     # If verification is already marked verified but the credential has not been issued yet,
@@ -622,8 +805,8 @@ def _continue(client: AgentVerifiedClient) -> str:
     if credential_path().exists():
         save_state(state)
         return (
-            f"AgentVerified credential already holder-bound and saved.\nAgent ID: {state.get('qpid')}\n"
-            f"Assurance: {state.get('assurance')}\nIdentity ready."
+            f"AgentVerified credential already holder-bound and saved.\nAgent ID: {state.get('avid')}\n"
+            f"Assurance: {_display_assurance(state.get('assurance'))}\nIdentity ready."
         )
 
     offer = client.request(
@@ -661,7 +844,7 @@ def _continue(client: AgentVerifiedClient) -> str:
     save_state(state)
     return (
         "AgentVerified credential issued and holder proof verified.\n"
-        f"Agent ID: {state.get('qpid')}\nAssurance: {state.get('assurance')}\n"
+        f"Agent ID: {state.get('avid')}\nAssurance: {_display_assurance(state.get('assurance'))}\n"
         f"Credential: {credential_path()}\nIdentity ready."
     )
 
@@ -683,14 +866,16 @@ def _doctor(client: AgentVerifiedClient) -> str:
 
 _HELP = """AgentVerified ID for Loki
 /id status                 Show local + live AgentVerified identity state
-/id start [name]           Generate holder key and start browser enrollment
-/id start --console [name] Use the business/admin approval surface
-/id continue               Exchange approval, reconcile verification, issue the holder-bound credential
+/id start [name]           First-time browser enrollment only
+/id start --console [name] Use the business/admin approval surface for first enrollment
+/id reconnect              Reconnect Loki to the existing AgentVerified ID
+/id reconnect --console    Use the business/admin approval surface for reconnect
+/id continue               Finish the pending enrollment or reconnect authorization
 /id doctor                 Check public AgentVerified issuer/discovery endpoints
 /id open                   Reprint the pending AgentVerified approval URL
 /id help                   Show this help
 
-Auth: /id start uses a short-lived browser enrollment. Human Cognito bearer tokens never need to enter Loki.
+/id reconnect never creates a new Agent ID, replaces the holder key, or repeats identity verification.
 Private holder key: stored mode 0600 under Loki home; never uploaded to AgentVerified."""
 
 
@@ -711,6 +896,9 @@ def run_id_command(raw_args: str = "") -> str:
             surface = "console" if any(item in {"--business", "--console"} for item in parts[1:]) else "wallet"
             name_parts = [item for item in parts[1:] if item not in {"--business", "--console", "--personal", "--wallet"}]
             return _start(client, " ".join(name_parts).strip() or "Loki Agent", surface)
+        if action == "reconnect":
+            surface = "console" if any(item in {"--business", "--console"} for item in parts[1:]) else "wallet"
+            return _reconnect(client, surface)
         if action in {"continue", "resume", "credential"}:
             return _continue(client)
         if action == "doctor":
@@ -718,7 +906,12 @@ def run_id_command(raw_args: str = "") -> str:
         if action == "open":
             state = load_state()
             url = state.get("verification_url") or state.get("enrollment_url")
-            return f"AgentVerified ID approval: {url}\nAfter approval / verification, run /id continue." if url else "No pending AgentVerified approval URL. Run /id start."
+            if not url:
+                command = "/id reconnect" if state.get("agent_id") else "/id start"
+                return f"No pending AgentVerified approval URL. Run {command}."
+            if state.get("enrollment_mode") == "reconnect":
+                return f"AgentVerified reconnect approval: {url}\nAfter approval, run /id continue."
+            return f"AgentVerified ID approval: {url}\nAfter approval / verification, run /id continue."
         return f"Unknown /id action: {action}\n\n{_HELP}"
     except AgentVerifiedIdentityError as exc:
         return f"AgentVerified ID: {exc}"
