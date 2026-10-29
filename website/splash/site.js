@@ -618,12 +618,25 @@
   const prepareStatementWords = () => {
     if (!introTitle || introTitle.querySelector('.statement-word')) return [...(introTitle?.querySelectorAll('.statement-word') ?? [])];
     const words = (introTitle.textContent ?? '').trim().split(/\s+/);
+    const normalizedWords = words.map(word => word.toLowerCase().replace(/[^a-z0-9]+/g, ''));
+    const staticPhraseWords = (introTitle.dataset.staticWhitePhrase ?? '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const staticWhiteWordIndexes = new Set();
+
+    if (staticPhraseWords.length) {
+      for (let startIndex = 0; startIndex <= normalizedWords.length - staticPhraseWords.length; startIndex += 1) {
+        const matchesPhrase = staticPhraseWords.every((phraseWord, phraseIndex) => normalizedWords[startIndex + phraseIndex] === phraseWord);
+        if (!matchesPhrase) continue;
+        staticPhraseWords.forEach((_, phraseIndex) => staticWhiteWordIndexes.add(startIndex + phraseIndex));
+      }
+    }
+
     introTitle.textContent = '';
     words.forEach((word, index) => {
       const span = document.createElement('span');
       span.className = 'statement-word';
+      if (staticWhiteWordIndexes.has(index)) span.classList.add('is-static-white');
       span.textContent = word;
-      span.style.setProperty('--word-tone', '111');
+      span.style.setProperty('--word-tone', staticWhiteWordIndexes.has(index) ? '244' : '111');
       introTitle.appendChild(span);
       if (index < words.length - 1) introTitle.appendChild(document.createTextNode(' '));
     });
@@ -637,6 +650,10 @@
     const clampedProgress = Math.max(0, Math.min(1, progress));
     const readingPosition = clampedProgress * (statementWords.length + 2);
     statementWords.forEach((word, index) => {
+      if (word.classList.contains('is-static-white')) {
+        word.style.setProperty('--word-tone', '244');
+        return;
+      }
       const softProgress = Math.max(0, Math.min(1, (readingPosition - index) / 3));
       const tone = Math.round(111 + ((244 - 111) * softProgress));
       word.style.setProperty('--word-tone', String(tone));
@@ -650,7 +667,7 @@
     if (introSection) {
       const rect = introSection.getBoundingClientRect();
       const viewportHeight = window.innerHeight || 1;
-      const start = viewportHeight * 0.86;
+      const start = viewportHeight * 0.42;
       const end = -Math.min(rect.height * 0.35, viewportHeight * 0.55);
       const progress = (start - rect.top) / Math.max(1, start - end);
       setStatementProgress(progress);

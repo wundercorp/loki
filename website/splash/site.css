@@ -3524,7 +3524,9 @@ main,
 
 .section-intro .section-kicker {
   position: relative;
+  width: 100%;
   color: #777777 !important;
+  text-align: center;
 }
 
 .section-intro .section-heading-wide {
@@ -3549,6 +3551,11 @@ main,
 .section-intro .statement-word {
   color: rgb(var(--word-tone, 111) var(--word-tone, 111) var(--word-tone, 111));
   transition: color 90ms linear;
+}
+
+.section-intro .statement-word.is-static-white,
+.section-intro .intro-static-white {
+  color: #f4f4f4 !important;
 }
 
 .section-intro .section-heading-wide p {
@@ -3996,36 +4003,53 @@ main,
   }
 
   .hero-brand-plate {
-    top: auto;
-    right: 28px;
-    bottom: 510px;
-    width: 220px;
+    display: none;
+  }
+
+  .npm-stats-banner {
+    width: 100%;
+    padding: 0;
   }
 
   .npm-stats-link {
     display: grid;
     gap: 20px;
-    width: calc(100% - 32px);
-    padding: 26px 0;
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 28px 20px 30px;
+    justify-items: center;
+    text-align: center;
   }
 
   .npm-stats-brand {
-    justify-content: flex-start;
+    width: max-content;
+    margin: 0;
+    justify-self: center;
+    justify-content: center;
   }
 
   .npm-stats-list {
-    width: 100%;
-    overflow-x: auto;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: min(100%, 420px);
+    margin: 0;
+    justify-self: center;
+    justify-content: center;
+    overflow: visible;
   }
 
   .npm-stat {
-    min-width: 132px;
-    padding: 0 16px;
+    min-width: 0;
+    width: auto;
+    padding: 0 12px;
+    justify-items: center;
+    text-align: center;
   }
 
-  .npm-stat:first-child {
-    border-left: 0;
-    padding-left: 0;
+  .npm-stats-list .npm-stat:first-child {
+    border-left: 0 !important;
+    padding-left: 12px;
   }
 
   .section,
