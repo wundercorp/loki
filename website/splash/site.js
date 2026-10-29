@@ -583,6 +583,116 @@
     workflowConsole?.classList.add('is-complete');
   }
 
+
+  const heroNav = document.querySelector('.hero-nav');
+  const heroNavIndicator = document.querySelector('.hero-nav-indicator');
+  const heroNavLinks = [...document.querySelectorAll('.hero-nav-link')];
+  const activeHeroNavLink = heroNavLinks.find(link => link.classList.contains('is-active')) ?? heroNavLinks[0];
+  const heroEditorialImage = document.querySelector('.hero-editorial-image img');
+  const introSection = document.querySelector('.section-intro');
+  const introTitle = document.getElementById('intro-title');
+  const recorderMode = new URLSearchParams(window.location.search).get('rec') === '1';
+
+  const positionHeroNavIndicator = link => {
+    if (!heroNavIndicator || !link) return;
+    heroNavIndicator.style.width = `${link.offsetWidth}px`;
+    heroNavIndicator.style.transform = `translateX(${link.offsetLeft}px)`;
+  };
+
+  const initializeHeroNav = () => {
+    if (!heroNav || !heroNavIndicator || !activeHeroNavLink) return;
+    const reset = () => positionHeroNavIndicator(activeHeroNavLink);
+    requestAnimationFrame(reset);
+    if (document.fonts?.ready) document.fonts.ready.then(reset).catch(() => {});
+    heroNavLinks.forEach(link => {
+      link.addEventListener('pointerenter', () => positionHeroNavIndicator(link));
+      link.addEventListener('focus', () => positionHeroNavIndicator(link));
+    });
+    heroNav.addEventListener('pointerleave', reset);
+    heroNav.addEventListener('focusout', event => {
+      if (!heroNav.contains(event.relatedTarget)) reset();
+    });
+    window.addEventListener('resize', reset, { passive: true });
+  };
+
+  const prepareStatementWords = () => {
+    if (!introTitle || introTitle.querySelector('.statement-word')) return [...(introTitle?.querySelectorAll('.statement-word') ?? [])];
+    const words = (introTitle.textContent ?? '').trim().split(/\s+/);
+    introTitle.textContent = '';
+    words.forEach((word, index) => {
+      const span = document.createElement('span');
+      span.className = 'statement-word';
+      span.textContent = word;
+      span.style.setProperty('--word-tone', '111');
+      introTitle.appendChild(span);
+      if (index < words.length - 1) introTitle.appendChild(document.createTextNode(' '));
+    });
+    return [...introTitle.querySelectorAll('.statement-word')];
+  };
+
+  const statementWords = prepareStatementWords();
+
+  const setStatementProgress = progress => {
+    if (!statementWords.length) return;
+    const clampedProgress = Math.max(0, Math.min(1, progress));
+    const readingPosition = clampedProgress * (statementWords.length + 2);
+    statementWords.forEach((word, index) => {
+      const softProgress = Math.max(0, Math.min(1, (readingPosition - index) / 3));
+      const tone = Math.round(111 + ((244 - 111) * softProgress));
+      word.style.setProperty('--word-tone', String(tone));
+    });
+  };
+
+  let editorialMotionFrame = 0;
+  const updateEditorialScrollMotion = () => {
+    editorialMotionFrame = 0;
+    if (recorderMode || reduceMotion.matches) return;
+    if (introSection) {
+      const rect = introSection.getBoundingClientRect();
+      const viewportHeight = window.innerHeight || 1;
+      const start = viewportHeight * 0.86;
+      const end = -Math.min(rect.height * 0.35, viewportHeight * 0.55);
+      const progress = (start - rect.top) / Math.max(1, start - end);
+      setStatementProgress(progress);
+    }
+    if (heroEditorialImage) {
+      const drift = Math.max(-34, Math.min(34, window.scrollY * 0.12));
+      heroEditorialImage.style.setProperty('--hero-drift', `${drift}px`);
+    }
+  };
+
+  const requestEditorialMotionUpdate = () => {
+    if (editorialMotionFrame) return;
+    editorialMotionFrame = requestAnimationFrame(updateEditorialScrollMotion);
+  };
+
+  initializeHeroNav();
+
+  if (reduceMotion.matches) {
+    setStatementProgress(1);
+    root.classList.add('hero-entered');
+  } else {
+    root.classList.add('hero-motion-ready');
+    requestAnimationFrame(() => requestAnimationFrame(() => root.classList.add('hero-entered')));
+    if (recorderMode) {
+      const recorderStartedAt = performance.now();
+      const runRecorderMotion = now => {
+        const elapsed = now - recorderStartedAt;
+        setStatementProgress((elapsed - 1300) / 2900);
+        if (heroEditorialImage) {
+          const drift = Math.min(30, Math.max(0, elapsed / 180));
+          heroEditorialImage.style.setProperty('--hero-drift', `${drift}px`);
+        }
+        if (elapsed < 5600) requestAnimationFrame(runRecorderMotion);
+      };
+      requestAnimationFrame(runRecorderMotion);
+    } else {
+      window.addEventListener('scroll', requestEditorialMotionUpdate, { passive: true });
+      window.addEventListener('resize', requestEditorialMotionUpdate, { passive: true });
+      requestEditorialMotionUpdate();
+    }
+  }
+
   try {
     if (banner && localStorage.getItem(consentKey) !== 'dismissed') {
       banner.hidden = false;
