@@ -2877,6 +2877,7 @@ main,
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.88);
   box-shadow: 0 1px 0 rgba(255, 255, 255, 0.76) inset;
+  isolation: isolate;
 }
 
 .hero-nav-indicator {
@@ -2899,7 +2900,8 @@ main,
   height: 38px;
   padding: 0 15px;
   border-radius: 999px;
-  color: #555555;
+  color: #ffffff;
+  mix-blend-mode: difference;
   font-size: 13px;
   font-weight: 560;
   line-height: 1;
@@ -2907,9 +2909,9 @@ main,
   transition: color 180ms ease;
 }
 
-.hero-nav-link.is-active,
-.hero-nav-link:hover {
-  color: #ffffff;
+.hero-nav-link:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: -3px;
 }
 
 .hero-meta {
@@ -3745,10 +3747,47 @@ main,
   background: #000000;
 }
 
+.final-lockup {
+  position: relative;
+}
+
 .final-card {
+  min-width: 0;
   border-color: rgba(255,255,255,.24);
   background: #0a0a0a;
   box-shadow: none;
+  padding-right: clamp(210px, 20vw, 288px);
+}
+
+.footer-logo-float {
+  position: absolute;
+  top: 50%;
+  right: clamp(18px, 2.2vw, 28px);
+  z-index: 3;
+  width: clamp(154px, 15vw, 208px);
+  aspect-ratio: 1 / 1;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.footer-logo-float img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 14px 28px rgba(0,0,0,.34));
+}
+
+.final-discord-link {
+  color: inherit;
+  font-weight: 700;
+  text-decoration-color: rgba(244,244,244,.5);
+  text-underline-offset: 3px;
+}
+
+.final-discord-link:hover {
+  color: #ffffff;
+  text-decoration-color: #ffffff;
 }
 
 .final-grid {
@@ -4027,6 +4066,30 @@ main,
 
   .section-intro .ledger-item h3 {
     font-size: 22px;
+  }
+
+  .final-lockup {
+    display: grid;
+    gap: 20px;
+    justify-items: center;
+  }
+
+  .final-card {
+    width: 100%;
+    padding-right: 22px;
+  }
+
+  .footer-logo-float {
+    position: static;
+    justify-self: center;
+    width: min(154px, 40vw);
+    transform: none;
+    margin: -2px auto 0;
+  }
+
+  .footer-logo-float img {
+    margin: 0 auto;
+    filter: drop-shadow(0 10px 22px rgba(0,0,0,.28));
   }
 
   .footer {

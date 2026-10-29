@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 946 768" role="img" aria-labelledby="title desc">
+  <title id="title">WunderCorp mark</title>
+  <desc id="desc">Angular blue and black WunderCorp brand mark</desc>
+  <rect width="946" height="768" fill="#ffffff"/>
+  <g transform="translate(0 2)">
+    <polygon points="304,108 672,284 570,334 275,192" fill="#0047ff"/>
+    <polygon points="275,192 570,334 477,379 275,282" fill="#050505"/>
+    <polygon points="275,282 477,379 421,407 275,337" fill="#0047ff"/>
+    <polygon points="477,379 672,470 672,552 388,417" fill="#050505"/>
+    <polygon points="388,417 672,552 672,645 294,466" fill="#0047ff"/>
+    <polygon points="294,466 382,508 382,548 294,506" fill="#0047ff"/>
+  </g>
+</svg>
