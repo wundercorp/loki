@@ -116,6 +116,13 @@ infra/terraform/*.tfvars
 infra/terraform/tfplan
 *.tfstate
 *.tfstate.*
+**/.terraform/
+*.tfvars
+*.tfvars.json
+.terraform.lock.hcl
+.aws/
+crash.log
+crash.*.log
 
 # Local/generated files
 svg/
