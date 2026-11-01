@@ -297,7 +297,7 @@ def _ws_auth_ok(ws: "WebSocket") -> bool:
 
 def _resolve_chat_argv(
     resume: Optional[str] = None, sidecar_url: Optional[str] = None, profile: Optional[str] = None,
-    active_session_file: Optional[str] = None) -> tuple[list[str], Optional[str], Optional[dict]]:
+    active_session_file: Optional[str] = None, cwd_override: Optional[str] = None) -> tuple[list[str], Optional[str], Optional[dict]]:
     """Resolve the argv + cwd + env for the chat PTY (what ``loki --tui`` runs).
 
     Tests monkeypatch this with a tiny fake command.  Env contract: resume goes
@@ -342,6 +342,11 @@ def _resolve_chat_argv(
     except Exception:
         _log.warning("Failed to apply terminal config bridge for dashboard chat", exc_info=True)
     _apply_tui_python_env(env)
+    if cwd_override:
+        override_path = Path(cwd_override).expanduser().resolve()
+        if not override_path.is_dir():
+            raise FileNotFoundError(f"Chat context workspace does not exist: {override_path}")
+        env["LOKI_CWD"] = str(override_path)
     env.setdefault("NODE_ENV", "production")
     # Mouse tracking would swallow wheel events the browser needs for
     # transcript scrolling; disable it for the dashboard PTY only.
@@ -430,13 +435,15 @@ def _build_sidecar_url(channel: str) -> Optional[str]:
 
 async def _resolve_chat_argv_async(
     resume: Optional[str] = None, sidecar_url: Optional[str] = None, profile: Optional[str] = None,
-    active_session_file: Optional[str] = None) -> tuple[list[str], Optional[str], Optional[dict]]:
+    active_session_file: Optional[str] = None, cwd_override: Optional[str] = None) -> tuple[list[str], Optional[str], Optional[dict]]:
     """Resolve chat argv off the event loop (it may run ``npm run build``); the
     async lock keeps one-build-at-a-time without parking worker threads."""
     from loki_cli.web_server import _get_chat_argv_lock, app
     kwargs = {"resume": resume, "sidecar_url": sidecar_url, "profile": profile}
     if active_session_file is not None:
         kwargs["active_session_file"] = active_session_file
+    if cwd_override is not None:
+        kwargs["cwd_override"] = cwd_override
 
     async with _get_chat_argv_lock(app):
         return await asyncio.to_thread(_resolve_chat_argv, **kwargs)

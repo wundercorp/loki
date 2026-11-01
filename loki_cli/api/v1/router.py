@@ -9,6 +9,7 @@ from loki_cli.web_routers import (
     audio,
     chat_ws,
     config_env,
+    context,
     cron,
     dashboard_ui,
     files,
@@ -30,6 +31,7 @@ from loki_cli.web_routers import (
 
 def mount_api_routes(app: Any) -> None:
     app.include_router(agentvm.router)
+    app.include_router(context.router)
     app.include_router(files.router)
     app.include_router(git.router)
     app.include_router(local_models.router)

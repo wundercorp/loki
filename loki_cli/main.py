@@ -347,6 +347,7 @@ from loki_cli.subcommands.console import build_console_parser
 from loki_cli.subcommands.update import build_update_parser
 from loki_cli.subcommands.uninstall import build_uninstall_parser
 from loki_cli.subcommands.dashboard import build_dashboard_parser, build_serve_parser
+from loki_cli.subcommands.handoff import build_handoff_parser
 from loki_cli.subcommands.gui import build_gui_parser
 from loki_cli.subcommands.logs import build_logs_parser
 from loki_cli.subcommands.prompt_size import build_prompt_size_parser
@@ -1823,6 +1824,7 @@ cmd_debug = _forward_command("cmd_debug", "loki_cli.debug", "run_debug", doc='De
 cmd_skin = _forward_command("cmd_skin", "loki_cli.skin_cmd", "skin_command", doc='Skin management (list / use / set).')
 cmd_import = _forward_command("cmd_import", "loki_cli.backup", "run_import", doc='Restore a Loki backup from a zip file.')
 cmd_dashboard_register = _forward_command("cmd_dashboard_register", "loki_cli.dashboard_register", "cmd_dashboard_register", doc='Register a self-hosted dashboard OAuth client with WunderCorp Portal.')
+cmd_handoff = _forward_command("cmd_handoff", "loki_cli.web_handoff", "handoff_command", forward_return=True, doc='Upload a local workspace and continue in hosted Loki web chat.')
 cmd_gateway_enroll = _forward_command("cmd_gateway_enroll", "loki_cli.gateway_enroll", "cmd_gateway_enroll", doc='Enroll a self-hosted gateway with a relay connector.')
 cmd_prompt_size = _forward_command("cmd_prompt_size", "loki_cli.prompt_size", "cmd_prompt_size", doc='Show a byte/char breakdown of the system prompt + tool schemas.')
 cmd_pairing = _forward_command("cmd_pairing", "loki_cli.pairing", "pairing_command")
@@ -2631,7 +2633,7 @@ _BUILTIN_SUBCOMMANDS = frozenset(
     {
         "acp", "approvals", "auth", "backup", "bundles", "checkpoints", "claw", "completion",
         "computer-use",
-        "config", "console", "cron", "curator", "dashboard", "serve", "debug", "doctor",
+        "config", "console", "cron", "curator", "dashboard", "serve", "debug", "doctor", "handoff",
         "dump", "egress", "fallback", "gateway", "hooks", "import", "import-agent", "insights",
         "gui", "desktop", "kanban", "login", "logout", "logs", "lsp", "mcp", "memory", "migrate", "moa",
         "journey", "memory-graph", "learning",
@@ -3293,6 +3295,7 @@ def _build_cli_parser():
         cmd_dashboard=cmd_dashboard,
         cmd_dashboard_register=cmd_dashboard_register,
     )
+    build_handoff_parser(subparsers, cmd_handoff=cmd_handoff)
     # "desktop" is canonical (Loki-Setup.exe tells users to run it, so it
     # must be the name --help shows); "gui" is a deprecated alias.
     build_gui_parser(subparsers, cmd_gui=cmd_gui)

@@ -468,6 +468,18 @@ async def pty_ws(ws: WebSocket) -> None:
                 await ws.send_json({"type": "resume", "id": resume})
 
     resolve_kwargs = {"resume": resume, "sidecar_url": sidecar_url, "profile": profile}
+    context_id = (ws.query_params.get("context") or "").strip()
+    if context_id:
+        from loki_cli.web_context import ContextError, resolve_context_workspace
+
+        identity = getattr(ws, "_loki_auth_identity", {}) or {}
+        user_id = str(identity.get("user_id") or "local")
+        try:
+            context_workspace = resolve_context_workspace(user_id, context_id)
+        except ContextError:
+            await _pty_fail(ws, "Chat context was not found or is not available to this account.")
+            return
+        resolve_kwargs["cwd_override"] = str(context_workspace)
     if active_session_file is not None:
         resolve_kwargs["active_session_file"] = str(active_session_file)
 
@@ -484,9 +496,14 @@ async def pty_ws(ws: WebSocket) -> None:
     registry_resume = raw_resume
     if raw_resume and env:
         registry_resume = env.get("LOKI_TUI_RESUME") or raw_resume
-    if attach_token is not None and (registry_resume or profile):
+    if attach_token is not None and (registry_resume or profile or context_id):
         # Key explicit resumes on their canonical target, never the active-session fallback.
-        attach_token = f"{attach_token}\0{profile or ''}\0{registry_resume or ''}"
+        # Context workspaces are also part of PTY identity so opening a handoff URL
+        # can never reattach an older process that was launched in another workspace.
+        attach_token = (
+            f"{attach_token}\0{profile or ''}\0{registry_resume or ''}"
+            f"\0context:{context_id}"
+        )
 
     def _spawn():
         return PtyBridge.spawn(argv, cwd=cwd, env=env)

@@ -468,6 +468,24 @@ export const api = {
         }),
       },
     ),
+  uploadChatContext: (file: File, label = "") => {
+    const form = new FormData();
+    form.append("file", file, file.name);
+    if (label) form.append("label", label);
+    return fetchJSON<ChatContextUploadResponse>("/api/context/upload", {
+      method: "POST",
+      body: form,
+    });
+  },
+  getChatContext: (contextId: string) =>
+    fetchJSON<ChatContextInfo>(
+      `/api/context/${encodeURIComponent(contextId)}`,
+    ),
+  deleteChatContext: (contextId: string) =>
+    fetchJSON<{ ok: boolean }>(
+      `/api/context/${encodeURIComponent(contextId)}`,
+      { method: "DELETE" },
+    ),
   listFiles: (path?: string) => {
     const query = path ? `?path=${encodeURIComponent(path)}` : "";
     return fetchJSON<ManagedFilesResponse>(`/api/files${query}`);
@@ -2071,6 +2089,20 @@ export interface SessionMessagesResponse {
 export interface LogsResponse {
   file: string;
   lines: string[];
+}
+
+export interface ChatContextInfo {
+  context_id: string;
+  name: string;
+  original_filename: string;
+  created_at: number;
+  file_count: number;
+  expanded_bytes: number;
+}
+
+export interface ChatContextUploadResponse extends ChatContextInfo {
+  ok: boolean;
+  chat_url: string;
 }
 
 export interface ManagedFileEntry {

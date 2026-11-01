@@ -25,8 +25,16 @@ import "@xterm/xterm/css/xterm.css";
 import { Button } from "@wundercorp/loki-ui/ui/components/button";
 import { Typography } from "@wundercorp/loki-ui/ui/components/typography/index";
 import { cn } from "@/lib/utils";
-import { Copy, PanelRight, RotateCcw, X } from "lucide-react";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { Copy, Package, PanelRight, RotateCcw, Upload, X } from "lucide-react";
+import {
+  type ChangeEvent,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router";
 
@@ -34,7 +42,7 @@ import { ChatSidebar } from "@/components/ChatSidebar";
 import { ChatSessionList } from "@/components/ChatSessionList";
 import { usePageHeader } from "@/contexts/usePageHeader";
 import { useI18n } from "@/i18n";
-import { api } from "@/lib/api";
+import { api, type ChatContextInfo } from "@/lib/api";
 import { latchChatActivation } from "@/lib/chat-activation";
 import { copyTextToClipboard } from "@/lib/clipboard";
 import { normalizeSessionTitle } from "@/lib/chat-title";
@@ -364,13 +372,24 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
   // treat the current resume target as part of the PTY identity and rebuild the
   // terminal session when it changes.
   const resumeParam = searchParams.get("resume");
+  const contextParam = searchParams.get("context");
+  const contextInputRef = useRef<HTMLInputElement | null>(null);
+  const [contextInfo, setContextInfo] = useState<ChatContextInfo | null>(null);
+  const [contextInfoId, setContextInfoId] = useState("");
+  const [contextUploading, setContextUploading] = useState(false);
+  const [contextUploadError, setContextUploadError] = useState<string | null>(null);
+  const [contextLoadError, setContextLoadError] = useState<string | null>(null);
+  const [contextLoadErrorId, setContextLoadErrorId] = useState("");
   // Profile-scoped chat: spawn the PTY under the globally selected
   // management profile. Changing it remounts the terminal (key below /
   // effect dep) so the user explicitly starts a fresh scoped session.
   const { profile: scopedProfile } = useProfileScope();
   const channel = useMemo(
-    () => generateChannelId(`${resumeParam ?? ""}\0${scopedProfile}`),
-    [resumeParam, scopedProfile],
+    () =>
+      generateChannelId(
+        `${resumeParam ?? ""}\0${contextParam ?? ""}\0${scopedProfile}`,
+      ),
+    [resumeParam, contextParam, scopedProfile],
   );
   const titleScope = `${channel}\0${reconnectNonce}`;
   const sessionTitle =
@@ -379,6 +398,95 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     (title: string | null) => setSessionTitleState({ scope: titleScope, title }),
     [titleScope],
   );
+
+  useEffect(() => {
+    if (!contextParam) return;
+
+    let cancelled = false;
+    api
+      .getChatContext(contextParam)
+      .then((info) => {
+        if (cancelled) return;
+        setContextInfo(info);
+        setContextInfoId(contextParam);
+        setContextLoadError(null);
+        setContextLoadErrorId(contextParam);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setContextLoadError("This workspace context is unavailable.");
+        setContextLoadErrorId(contextParam);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [contextParam]);
+
+  const handleContextUpload = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0] ?? null;
+      event.target.value = "";
+      if (!file) return;
+      if (!file.name.toLowerCase().endsWith(".zip")) {
+        setContextUploadError("Choose a ZIP archive.");
+        return;
+      }
+
+      setContextUploading(true);
+      setContextUploadError(null);
+      try {
+        const uploaded = await api.uploadChatContext(file);
+        setContextInfo(uploaded);
+        setContextInfoId(uploaded.context_id);
+        setContextLoadError(null);
+        setContextLoadErrorId(uploaded.context_id);
+        const next = new URLSearchParams(searchParams);
+        next.delete("resume");
+        next.set("context", uploaded.context_id);
+        forceFreshPtyRef.current = true;
+        reconnectAttemptRef.current = 0;
+        clearReconnectTimer();
+        blockedInputNoticeRef.current = false;
+        ptyInputLineRef.current = "";
+        mobileReplacementInputUntilRef.current = 0;
+        setBanner(null);
+        setLastCloseCode(null);
+        setPtyState("connecting");
+        setSearchParams(next, { replace: true });
+      } catch (error) {
+        let message = String(error);
+        if (error instanceof Error) {
+          message = error.message;
+        }
+        setContextUploadError(message || "Could not upload ZIP context.");
+      } finally {
+        setContextUploading(false);
+      }
+    },
+    [clearReconnectTimer, searchParams, setSearchParams],
+  );
+
+  const detachContext = useCallback(() => {
+    const next = new URLSearchParams(searchParams);
+    next.delete("context");
+    next.delete("resume");
+    forceFreshPtyRef.current = true;
+    reconnectAttemptRef.current = 0;
+    clearReconnectTimer();
+    blockedInputNoticeRef.current = false;
+    ptyInputLineRef.current = "";
+    mobileReplacementInputUntilRef.current = 0;
+    setContextInfo(null);
+    setContextInfoId("");
+    setContextUploadError(null);
+    setContextLoadError(null);
+    setContextLoadErrorId("");
+    setBanner(null);
+    setLastCloseCode(null);
+    setPtyState("connecting");
+    setSearchParams(next, { replace: true });
+  }, [clearReconnectTimer, searchParams, setSearchParams]);
 
   useEffect(() => {
     if (!isActive) {
@@ -1173,6 +1281,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
       if (unmounting) return;
       const params: Record<string, string> = { channel };
       if (resumeParam) params.resume = resumeParam;
+      if (contextParam) params.context = contextParam;
       if (forceFresh) params.fresh = "1";
       // Keep-alive identity: reattach to this tab's living PTY across
       // refresh/transient drops. A forced-fresh start rotates the token so
@@ -1562,6 +1671,7 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     channel,
     clearReconnectTimer,
     resumeParam,
+    contextParam,
     scopedProfile,
     reconnectNonce,
   ]);
@@ -1737,6 +1847,19 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
     ptyState,
     hydrating: resumeHydrating,
   });
+  let visibleContextInfo: ChatContextInfo | null = null;
+  if (contextParam && contextInfoId === contextParam) {
+    visibleContextInfo = contextInfo;
+  }
+  let visibleContextError = contextUploadError;
+  if (!visibleContextError && contextParam && contextLoadErrorId === contextParam) {
+    visibleContextError = contextLoadError;
+  }
+  let contextUploadButtonLabel = "Upload context ZIP";
+  if (contextUploading) {
+    contextUploadButtonLabel = "Uploading context…";
+  }
+
   const mobileModelToolsPortal =
     isActive &&
     narrow &&
@@ -1833,6 +1956,49 @@ export default function ChatPage({ isActive = true }: { isActive?: boolean }) {
           {visibleBanner}
         </div>
       )}
+
+      <div className="flex flex-wrap items-center gap-2 border border-current/10 bg-midground/[0.03] px-2.5 py-2 text-xs">
+        <input
+          ref={contextInputRef}
+          type="file"
+          accept=".zip,application/zip"
+          className="hidden"
+          onChange={handleContextUpload}
+        />
+        <Button
+          size="sm"
+          outlined
+          disabled={contextUploading}
+          onClick={() => contextInputRef.current?.click()}
+          prefix={<Upload className="h-3.5 w-3.5" />}
+        >
+          {contextUploadButtonLabel}
+        </Button>
+        {visibleContextInfo && (
+          <div className="flex min-w-0 items-center gap-2 text-text-secondary">
+            <Package className="h-3.5 w-3.5 shrink-0" />
+            <span className="max-w-[min(32rem,55vw)] truncate text-midground">
+              {visibleContextInfo.name}
+            </span>
+            <span className="whitespace-nowrap opacity-70">
+              {visibleContextInfo.file_count.toLocaleString()} files · {Math.max(1, Math.round(visibleContextInfo.expanded_bytes / 1024)).toLocaleString()} KB
+            </span>
+            <Button
+              ghost
+              size="icon"
+              onClick={detachContext}
+              aria-label="Detach workspace context"
+              title="Detach workspace context"
+              className="h-6 w-6 text-text-secondary hover:text-midground"
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
+        {visibleContextError && (
+          <span className="text-warning">{visibleContextError}</span>
+        )}
+      </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-2 lg:flex-row lg:gap-3">
         <div
